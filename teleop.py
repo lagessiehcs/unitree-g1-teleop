@@ -407,7 +407,7 @@ class G1TeleopNode(Node):
         sign = 1 if y_parent[2]>0 else -1
         theta_x = abs(sign*np.arccos(y_parent[1])) # rotation around x
         
-        theta_y = pitch  # rotation around y
+        theta_y = -pitch if side == "left" else pitch # rotation around y
         
         rot = R.from_euler('YX', [theta_y, theta_x], degrees=False)
         
