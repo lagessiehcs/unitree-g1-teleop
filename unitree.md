@@ -1,14 +1,25 @@
 # Mujoco Simulation
-- Follow instruction from link: https://github.com/unitreerobotics/unitree_mujoco
+- Follow instruction from link: https://github.com/unitreerobotics/unitree_mujoco to download and setup the unitree_mujoco repo
 - Note: The interface parameter in unitree_mujoco/simulate/config.yaml must be set correctly (the same as the interface in CYCLONEDDS_URI)
 - Mujoco version for cpp: 3.3.6
-- If 2. step in the installation for C++ not successful with error error: "‘uint8_t’ does not name a type":
-  Add "#include <cstdint>" to "X/unitree_mujoco/simulate/src/joystick/jstest.cc" and compile again (X is the root directory of unitree_mujoco)
+- If 2. step in the installation for C++ not successful with error
+  ```bash
+  error: ‘uint8_t’ does not name a type"
+  ```
+  Add "#include <cstdint>" to "unitree_mujoco/simulate/src/joystick/jstest.cc" and compile again 
   
 - Python Simulation: 
-    Possible error: "Could not locate cyclonedds. Try to set CYCLONEDDS_HOME or CMAKE_PREFIX_PATH" --> Follow solution provided, try also "export CYCLONEDDS_HOME=~/cyclonedds/install" (No "") if 'export CYCLONEDDS_HOME="~/cyclonedds/install"' (with "") doesnt work.
+    Possible error: "Could not locate cyclonedds. Try to set CYCLONEDDS_HOME or CMAKE_PREFIX_PATH" --> Follow solution provided, try also
+  ```bash
+  export CYCLONEDDS_HOME=~/cyclonedds/install
+  ```
+   if
+  ```bash
+  export CYCLONEDDS_HOME="~/cyclonedds/install"
+  ```
+  doesnt work.
     
-- Python Version did not work because colcon build had problem --> use cpp simulation
+- Python Version did not work because colcon build had some unsolved problems --> use cpp simulation
 
 
 # unitree_ros2
@@ -30,27 +41,46 @@
     2) (Optional) To avoid sourcing the above files every time, "source ~/Desktop/quan/unitree_setup.bash" can be added to .bashrc. The wanted setup file can then be chosen every time a new terminal opens.
     
 - Errors:
-    1) Running the "./unitree_mujoco" simulation inside "unitree_mujoco/simulate/build" can cause crashing problem because of a DDS runtime mismatch. This can be fixed by the line "export LD_LIBRARY_PATH=/opt/unitree_robotics/lib:$LD_LIBRARY_PATH" befor running the simulation. (this line is also added to the unitree_setup.bash file. 
-    2) After changing the Network interface name in 
+    1) The command
+       ```bash
+       cd unitree_mujoco/simulate/build/
+       ./unitree_mujoco simulation
+       ```
+       can cause crashing problem because of a DDS runtime mismatch. This can be fixed by
+       ```bash
+       export LD_LIBRARY_PATH=/opt/unitree_robotics/lib:$LD_LIBRARY_PATH
+       ```
+       before running the simulation. (this line is also added to the unitree_setup.bash file) 
+    3) After changing the Network interface name in
+       ```bash
         export CYCLONEDDS_URI='<CycloneDDS><Domain><General><Interfaces>
                             <NetworkInterface name="wlp0s20f3" priority="default" multicast="default" />
                         </Interfaces></General></Domain></CycloneDDS>'
-        If CYCLONEDDS_URI seems not to be applied (e.g. topics from a previously connected network can still be seen, or "ros2 topic list" spins forever without output any topics when an unwanted (previously connected) network interface is not in connection), reconnect to the previously connected network or reboot if reconnection fails and restart ros2 daemon by:
-                    ros2 daemon stop
-                    ros2 daemon start
+       ```
+        If CYCLONEDDS_URI seems not to be applied (e.g. topics from a previously connected network can still be seen, or "ros2 topic list" spins forever without output any topics when an unwanted (previously connected) network interface is not in connection), reconnect to the previously connected network and restart ros2 daemon by:
+       ```bash
+        ros2 daemon stop
+        ros2 daemon start
+       ```
+       or reboot if reconnection fails
                     
     
 # ROS2 in conda python 3.12
 - ROS2 only support python3.12, so a conda environment with python3.12 is needed.
-- Required parameter: 
+- Required parameter:
+  ```bash
     export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6
+  ```
 - Required installation:
-    - pip install empy
-    - pip install catkin_pkg
-    - pip install lark lark-parser
-    - Any ROS2 packages previously built with python 3.13 (conda base) need to be rebuilt with python3.12
+  ```bash
+    pip install empy
+    pip install catkin_pkg
+    pip install lark lark-parser
+  ```
+  Any ROS2 packages previously built with python 3.13 (conda base) need to be rebuilt with python3.12
     
 # Teleop
 - Required packages:
+  ```bash
     pip install scipy
-    
+  ``` 
