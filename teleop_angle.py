@@ -340,6 +340,18 @@ class G1TeleopNode(Node):
 
                 # print(g1_joint_id_group)
 
+            elif sensor_id_pair == [SensorID.UpperBack, SensorID.LowerBack]:
+                pitch, roll, yaw = self.pry_waist(rot_matrix)
+
+                # print(np.degrees(pitch))
+                # print(np.degrees(roll))
+                # print(np.degrees(yaw))
+                # print()
+
+                self.g1_joint_angles[g1_joint_id_group[0]] = roll + self.right_elbow_yaw
+
+                # print(g1_joint_id_group)
+
             else:
                 for g1_joint_id in g1_joint_id_group:
                     self.g1_joint_angles[g1_joint_id] = 0.0
@@ -508,6 +520,21 @@ class G1TeleopNode(Node):
         roll = -roll
         if side == "right":
             pitch = -pitch
+
+        # print(np.degrees(roll))
+        # print(np.degrees(pitch))
+        # print(np.degrees(yaw))
+        # print()
+        return pitch, roll, yaw
+    
+    def pry_waist(self, rot_matrix):
+       
+        r = R.from_matrix(rot_matrix)
+        roll,pitch,yaw = r.as_euler('yzx')
+
+        yaw = -yaw
+        roll = -roll
+    
 
         # print(np.degrees(roll))
         # print(np.degrees(pitch))
