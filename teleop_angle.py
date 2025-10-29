@@ -348,7 +348,7 @@ class G1TeleopNode(Node):
                 # print(np.degrees(yaw))
                 # print()
 
-                self.g1_joint_angles[g1_joint_id_group[0]] = roll + self.right_elbow_yaw
+                self.g1_joint_angles[g1_joint_id_group[0]] = roll
 
                 # print(g1_joint_id_group)
 
