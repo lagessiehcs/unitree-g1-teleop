@@ -86,7 +86,7 @@ ros_recording/install/setup.bash
 for the sensor-suit's ROS2 interfaces
 
 ## unitree_setup.bash (Optional)
-- For your convenience, the `unitree_setup.bash` file is prepared, which covers all setup steps for the [ROS2 in conda python 3.12](#ros2-in-conda-python-312), [unitree_ros2](#unitree_ros2) and [ros_recording](#ros_recording) sections. Source this after `colcon build` the two ros2 packages.
+- For your convenience, the `unitree_setup.bash` file is prepared, which covers all setup steps in the [ROS2 in conda python 3.12](#ros2-in-conda-python-312), [unitree_ros2](#unitree_ros2) and [ros_recording](#ros_recording) sections. Source this after `colcon build` the two ros2 packages.
  
 ### Notes: 
 - Both [unitree_ros2](https://github.com/unitreerobotics/unitree_ros2) and **ros_recording** need to be put under the same directory.
