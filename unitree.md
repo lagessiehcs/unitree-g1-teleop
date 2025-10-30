@@ -29,7 +29,7 @@ In case running and building ROS2 packages in a conda virtual environment fail:
 - The following need to be done after the colcon build of cyclonedds_ws:
   1) For each of the files `unitree_ros2/setup.sh`, `unitree_ros2/setup_local.sh`, `unitree_ros2/setup_default.sh`:
      - Change all ros2 distro name in the following setup file to the correct distro (here from foxy to jazzy)
-     - Change the `NetworkInterface name` in `CYCLONEDDS_URI` to the corrected one:
+     - Change the `NetworkInterface name` in `CYCLONEDDS_URI` to the correct one:
        ```bash
         export CYCLONEDDS_URI='<CycloneDDS><Domain><General><Interfaces>
                             <NetworkInterface name="wlp0s20f3" priority="default" multicast="default" />
