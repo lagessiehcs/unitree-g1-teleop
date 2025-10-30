@@ -160,7 +160,7 @@ for the sensor-suit's ROS2 interfaces
 - Run the `sensorsuit_node.py` either directly on the RasPi or on your computer:
   On RasPi:
   ```bash
-  ros2 run sensorsuit_driver sensorsuit_node.py
+  ros2 run sensorsuit_driver sensorsuit_node
   ```
   On your computer:
   ```bash
