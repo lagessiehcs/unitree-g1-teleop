@@ -152,17 +152,12 @@ for the sensor-suit's ROS2 interfaces
   ```bash
     pip install scipy
   ```
-- Run the ROS2 node `sensorsuit_node.py` provided in this repo on your computer for correct frequency (sampling time) setting. If you prefer running this node directly on the RasPi, remember to change the sampling time of the timer to a smaller value (0.001) works fine.
+- Run the ROS2 node `sensorsuit_node.py` provided in this repo on your computer for correct frequency (sampling time) setting.
 - Change the `SENSORSUIT_SERVER_ADDRESS` parameter if you use the `sensorsuit_node.py` file in this repo.
 
 ## Run
 - Run the controller in  the RasPi
-- Run the `sensorsuit_node.py` either directly on the RasPi or on your computer:
-  On RasPi:
-  ```bash
-  ros2 run sensorsuit_driver sensorsuit_node
-  ```
-  On your computer:
+- Run the `sensorsuit_node.py` ROS2 node:
   ```bash
   python3 sensorsuit_node.py
   ```
