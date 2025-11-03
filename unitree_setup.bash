@@ -15,8 +15,9 @@ if [[ $- == *i* ]]; then
     echo "Select environment:"
     echo "    1: unitree ros2 environment"
     echo "    2: unitree ros2 simulation environment"
+    echo "    3: unitree ros2 real robot and simulation environment"
     echo "Enter: unitree ros2 environment with default interface"
-    read -p "Enter choice [1/2/Enter]: " choice
+    read -p "Enter choice [1/2/3/Enter]: " choice
 
     case $choice in
         1)
@@ -33,6 +34,16 @@ if [[ $- == *i* ]]; then
                         </Interfaces></General></Domain></CycloneDDS>'
 
             ;;
+         3)
+            echo "Setup unitree ros2 real robot and simulation environment"
+            export ROS_DOMAIN_ID=0 # Modify the domain id to match the simulation
+            export CYCLONEDDS_URI='<CycloneDDS><Domain><General><Interfaces>
+                            <NetworkInterface name="enp0s31f6" priority="default" multicast="default" />
+                            <NetworkInterface name="wlp0s20f3" priority="default" multicast="default" />
+                        </Interfaces></General></Domain></CycloneDDS>'
+
+            ;;
+            
         *)
             echo "Setup unitree ros2 environment with default interface"
             ;;
