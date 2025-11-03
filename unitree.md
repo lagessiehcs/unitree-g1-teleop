@@ -1,5 +1,5 @@
 # Simulation and Teleop Setup
-This documentation assume a ROS2 distro (e.g. ROS2 Jazzy) is already installed on the computer.
+This documentation assumes a ROS2 distro (e.g. ROS2 Jazzy) is already installed on the computer.
 
 ## ROS2 in conda python 3.12
 In case running and building ROS2 packages in a conda virtual environment fail:
@@ -24,7 +24,7 @@ In case running and building ROS2 packages in a conda virtual environment fail:
 ## [unitree_ros2](https://github.com/unitreerobotics/unitree_ros2) 
 - This repo is needed for the unitree ros2 interfaces
 
-- Follow the setup instruction in the `README.md` file, replace the ros2 distro name in every command to the correspondingly installed ros2 distro (for our case from foxy to jazzy), e.g.: sudo apt install ros-~~foxy~~jazzy-rmw-cyclonedds-cpp
+- Follow the setup instruction in the `README.md` file of the [unitree_ros2](https://github.com/unitreerobotics/unitree_ros2) repo, replace the ros2 distro name in every command to the correspondingly installed ros2 distro (for our case from foxy to jazzy), e.g.: sudo apt install ros-~~foxy~~jazzy-rmw-cyclonedds-cpp
 
 - The following need to be done after the colcon build of cyclonedds_ws:
   1) For each of the files `unitree_ros2/setup.sh`, `unitree_ros2/setup_local.sh`, `unitree_ros2/setup_default.sh`:
@@ -145,7 +145,7 @@ for the sensor-suit's ROS2 interfaces
     ```
     doesnt work.
     
-- Python Simulator has not worked yet because `colcon build` had some unsolved problems (may relate to the current virtual environment), hence the C++ simulation was used instead
+  - Python Simulator has not worked yet because `colcon build` had some unsolved problems (may relate to the current virtual environment), hence the C++ simulation was used instead
  
 ## Teleop
 - Required packages:
