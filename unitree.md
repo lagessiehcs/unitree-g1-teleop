@@ -24,7 +24,7 @@ In case running and building ROS2 packages in a conda virtual environment fail:
 ## [unitree_ros2](https://github.com/unitreerobotics/unitree_ros2) 
 - This repo is needed for the unitree ros2 interfaces
 
-- Follow the setup instruction in the `README.md` file, replace the ros2 distro name in every command to the correspondingly installed ros2 distro (for our case from foxy to jazzy), e.g.: sudo apt install ros-~~foxy~~jazzy-rmw-cyclonedds-cpp
+- Follow the setup instruction in the `README.md` file of the [unitree_ros2](https://github.com/unitreerobotics/unitree_ros2) repo, replace the ros2 distro name in every command to the correspondingly installed ros2 distro (for our case from foxy to jazzy), e.g.: sudo apt install ros-~~foxy~~jazzy-rmw-cyclonedds-cpp
 
 - The following need to be done after the colcon build of cyclonedds_ws:
   1) For each of the files `unitree_ros2/setup.sh`, `unitree_ros2/setup_local.sh`, `unitree_ros2/setup_default.sh`:
