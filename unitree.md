@@ -145,7 +145,7 @@ for the sensor-suit's ROS2 interfaces
     ```
     doesnt work.
     
-- Python Simulator has not worked yet because `colcon build` had some unsolved problems (may relate to the current virtual environment), hence the C++ simulation was used instead
+  - Python Simulator has not worked yet because `colcon build` had some unsolved problems (may relate to the current virtual environment), hence the C++ simulation was used instead
  
 ## Teleop
 - Required packages:
