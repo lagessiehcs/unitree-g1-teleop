@@ -256,7 +256,7 @@ class G1TeleopNode(Node):
 
             msg.crc = self.crc.Crc(msg)
             self.lowcmd_publisher.publish(msg)
-            time.sleep(0.02)
+            time.sleep(0.002)
 
     def current_angles_callback(self, msg):
         for id in self.g1_current_joint_angles.keys():
