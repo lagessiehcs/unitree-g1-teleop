@@ -1,5 +1,5 @@
 # Simulation and Teleop Setup
-This documentation assume a ROS2 distro (e.g. ROS2 Jazzy) is already installed on the computer.
+This documentation assumes a ROS2 distro (e.g. ROS2 Jazzy) is already installed on the computer.
 
 ## ROS2 in conda python 3.12
 In case running and building ROS2 packages in a conda virtual environment fail:
