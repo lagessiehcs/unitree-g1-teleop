@@ -151,6 +151,7 @@ for the sensor-suit's ROS2 interfaces
 - Required packages:
   ```bash
     pip install scipy
+    pip install keyboard
   ```
 - Run the ROS2 node `sensorsuit_node.py` provided in this repo on your computer for correct frequency (sampling time) setting.
 - Change the `SENSORSUIT_SERVER_ADDRESS` parameter if you use the `sensorsuit_node.py` file in this repo.
