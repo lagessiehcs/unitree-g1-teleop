@@ -10,6 +10,7 @@ from utils.crc import CRC
 import numpy as np
 import threading
 import time
+import keyboard
 
 class SensorID():
     Chest = 1
@@ -187,6 +188,8 @@ class G1TeleopNode(Node):
             self.current_angles_callback,
             10)
         
+        self.teleop_enabled = False
+        
         # PD gains
         self.kp = 50.0
         self.kd = 1.0
@@ -225,6 +228,9 @@ class G1TeleopNode(Node):
 
         self.calibrated = True
         self.get_logger().info("Calibration complete!")
+        print("Press SPACEBAR to continue...")
+        keyboard.wait("space")  # Wait until user presses space
+        print("Continuing...")
 
     def set_angle(self, current, target, step_size):
         diff = target-current
@@ -242,13 +248,7 @@ class G1TeleopNode(Node):
 
             for i in G1_ACTIVE_JOINTS_23DOF:
                 msg.motor_cmd[i].mode = 1
-                # msg.motor_cmd[i].q = self.g1_target_joint_angles[i]
                 msg.motor_cmd[i].q = self.set_angle(self.g1_current_joint_angles[i], self.g1_target_joint_angles[i], self.step_size[i])
-                if i == G1JointID.LeftShoulderRoll:
-                    print(np.degrees(self.g1_current_joint_angles[i]))
-                    print(np.degrees(self.g1_target_joint_angles[i]))
-                    print(np.degrees(msg.motor_cmd[i].q))
-                    print()
                 msg.motor_cmd[i].dq = 0.0
                 msg.motor_cmd[i].kp = self.kp
                 msg.motor_cmd[i].kd = self.kd
