@@ -119,6 +119,20 @@ G1_ACTIVE_JOINTS_23DOF = [
     G1JointID.RightWristRoll
 ]
 
+G1_USED_JOINTS = [
+    G1JointID.WaistYaw,
+    G1JointID.LeftShoulderPitch,
+    G1JointID.LeftShoulderRoll,
+    G1JointID.LeftShoulderYaw,
+    G1JointID.LeftElbow,
+    G1JointID.LeftWristRoll,
+    G1JointID.RightShoulderPitch,
+    G1JointID.RightShoulderRoll,
+    G1JointID.RightShoulderYaw,
+    G1JointID.RightElbow,
+    G1JointID.RightWristRoll
+]
+
 ACTIV_SENSOR_IDS = [
     SensorID.LowerBack,
     SensorID.UpperArmLeft,
@@ -187,6 +201,8 @@ class G1TeleopNode(Node):
             self.current_angles_callback,
             10)
         
+        self.teleop_enabled = False
+        
         # PD gains
         self.kp = 50.0
         self.kd = 1.0
@@ -214,8 +230,11 @@ class G1TeleopNode(Node):
         self.right_elbow_roll = 0.0
         self.right_elbow_yaw = 0.0
 
-        self.publishAngles_thread = threading.Thread(target=self.publishAngles)
+        self.publishAngles_thread = threading.Thread(target=self.publishAngles, daemon=True)
         self.publishAngles_thread.start()
+
+        self.enableTeleop_thread = threading.Thread(target=self.enableTeleop, daemon=True)
+        self.enableTeleop_thread.start()
     
 
     def calibrate(self, sensor_orientations):
@@ -223,8 +242,11 @@ class G1TeleopNode(Node):
         for i, sensor_id_pair in enumerate(SENSOR_ID_PAIRS):
                 self.calib_joint_rotations[i] = sensor_orientations[sensor_id_pair[0]] * sensor_orientations[sensor_id_pair[1]].inv()
 
-        self.calibrated = True
         self.get_logger().info("Calibration complete!")
+        input("Press ENTER to start teleop ...")
+        self.teleop_enabled = True
+        self.calibrated = True
+        
 
     def set_angle(self, current, target, step_size):
         diff = target-current
@@ -233,29 +255,37 @@ class G1TeleopNode(Node):
             return current + sign * step_size
         else:
             return target
+        
+    def enableTeleop(self):
+        while True:
+            if self.calibrated:
+                if self.teleop_enabled:
+                    input("Teleop is running, press ENTER to stop...")
+                    self.teleop_enabled = False
+                    print("Teleop stopped!")
+                else:
+                    input("Teleop is not running, press ENTER to start...")
+                    self.teleop_enabled = True
+                    print("Teleop started!")
+            time.sleep(0.002)
 
     def publishAngles(self):
         while True:
-            msg = LowCmd()
-            msg.mode_pr = 0
-            msg.mode_machine = 4
+            if self.teleop_enabled:
+                msg = LowCmd()
+                msg.mode_pr = 0
+                msg.mode_machine = 4
 
-            for i in G1_ACTIVE_JOINTS_23DOF:
-                msg.motor_cmd[i].mode = 1
-                # msg.motor_cmd[i].q = self.g1_target_joint_angles[i]
-                msg.motor_cmd[i].q = self.set_angle(self.g1_current_joint_angles[i], self.g1_target_joint_angles[i], self.step_size[i])
-                if i == G1JointID.LeftShoulderRoll:
-                    print(np.degrees(self.g1_current_joint_angles[i]))
-                    print(np.degrees(self.g1_target_joint_angles[i]))
-                    print(np.degrees(msg.motor_cmd[i].q))
-                    print()
-                msg.motor_cmd[i].dq = 0.0
-                msg.motor_cmd[i].kp = self.kp
-                msg.motor_cmd[i].kd = self.kd
-                msg.motor_cmd[i].tau = 0.0
+                for i in G1_USED_JOINTS:
+                    msg.motor_cmd[i].mode = 1
+                    msg.motor_cmd[i].q = self.set_angle(self.g1_current_joint_angles[i], self.g1_target_joint_angles[i], self.step_size[i])
+                    msg.motor_cmd[i].dq = 0.0
+                    msg.motor_cmd[i].kp = self.kp
+                    msg.motor_cmd[i].kd = self.kd
+                    msg.motor_cmd[i].tau = 0.0
 
-            msg.crc = self.crc.Crc(msg)
-            self.lowcmd_publisher.publish(msg)
+                msg.crc = self.crc.Crc(msg)
+                self.lowcmd_publisher.publish(msg)
             time.sleep(0.002)
 
     def current_angles_callback(self, msg):
