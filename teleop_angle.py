@@ -202,18 +202,21 @@ class G1TeleopNode(Node):
             self.current_angles_callback,
             10)
         
+        self.publish_frequency = 50 #Hz
+        
         self.teleop_enabled = False
         self. current_arm_sdk = 0.0
+        self. arm_sdk_step = 0.4/self.publish_frequency
         
         # PD gains
         self.kp = 50.0
         self.kd = 1.0
         
-        self.lowcmd_publisher = self.create_publisher(LowCmd, '/arm_sdk', 10)
+        self.lowcmd_publisher = self.create_publisher(LowCmd, '/lowcmd', 10)
 
-        self.step_size = {id: np.radians(10.0) for id in G1_USED_JOINTS}
-        self.step_size[G1JointID.LeftElbow] = np.radians(5.0)
-        self.step_size[G1JointID.RightElbow] = np.radians(5.0)
+        self.step = 120/self.publish_frequency
+        self.step_sizes = {id: np.radians(self.step) for id in G1_USED_JOINTS}
+        
 
 
         # IMU IDs
@@ -250,13 +253,18 @@ class G1TeleopNode(Node):
         self.get_logger().info("Calibration complete!")
         input("Press ENTER to start teleop ...")
         self.teleop_enabled = True
+        print("Starting teleop...")
+        while self.current_arm_sdk != 1.0:
+            time.sleep(0.1)
+        print("Teleop started!")
         self.calibrated = True
+
         
 
     # def set_angle(self, index):
     #     target = self.g1_target_joint_angles[index]
     #     current = self.g1_current_joint_angles[index]
-    #     step_size = self.step_size[index]
+    #     step_size = self.step_sizes[index]
     #     if target == 0.0 and index in [G1JointID.LeftShoulderRoll, G1JointID.RightShoulderRoll]:
     #         step_size = np.radians(1)
 
@@ -271,20 +279,25 @@ class G1TeleopNode(Node):
     def set_angle(self, index):
         target = self.g1_target_joint_angles[index]
         current_cmd = self.g1_current_cmd[index]
-        step_size = self.step_size[index]
-        if target == 0.0 and index in [G1JointID.LeftShoulderRoll, G1JointID.LeftShoulderPitch, G1JointID.RightShoulderRoll, G1JointID.RightShoulderPitch]:
-            step_size = np.radians(1)
+        step_size = self.step_sizes[index]
+        # if target == 0.0 and index in [G1JointID.LeftShoulderRoll, G1JointID.LeftShoulderPitch, G1JointID.RightShoulderRoll, G1JointID.RightShoulderPitch]:
+        #     step_size = np.radians(self.step/5)
 
         diff = target-current_cmd
-        sign = 1 if diff >= 0 else -1
+        sign_diff = 1 if diff >= 0 else -1
   
-        current_cmd += sign * step_size
-        new_diff = target - current_cmd
-        new_sign = 1 if new_diff >= 0 else -1
 
-
-        if new_sign != sign:
+        if abs(diff) < step_size:
             current_cmd = target 
+        else:
+            current_cmd += sign_diff * step_size
+
+        # if index == G1JointID.LeftShoulderPitch:
+        #     print("current_cmd: ", np.degrees(self.g1_current_cmd[index]))
+        #     print("target: ", np.degrees(target))
+        #     print("sign_diff: ", sign_diff)
+        #     print(sign_diff * step_size)
+        #     print()
         
         self.g1_current_cmd[index] = current_cmd
         return current_cmd
@@ -296,52 +309,59 @@ class G1TeleopNode(Node):
             if self.calibrated:
                 if self.teleop_enabled:
                     input("Teleop is running, press ENTER to stop...")
+                    print("Stopping teleop...")
                     self.teleop_enabled = False
+                    while self.current_arm_sdk != 0.0:
+                        time.sleep(0.1)
                     print("Teleop stopped!")
                 else:
                     input("Teleop is not running, press ENTER to start...")
+                    print("Starting teleop...")
                     self.teleop_enabled = True
+                    while self.current_arm_sdk != 1.0:
+                        time.sleep(0.1)
                     print("Teleop started!")
-            time.sleep(0.002)
+            time.sleep(0.02)
 
     def publishAngles(self):
         while True:
-            if self.current_cmd_initialized:#self.teleop_enabled:
+            if self.current_cmd_initialized:
                 msg = LowCmd()
                 # msg.mode_pr = 0
                 # msg.mode_machine = 4
 
-
-                for i in G1_USED_JOINTS:
-                    # msg.motor_cmd[i].mode = 1
-                    msg.motor_cmd[i].q = self.set_angle(i)
-                    msg.motor_cmd[i].dq = 0.0
-                    msg.motor_cmd[i].kp = self.kp
-                    msg.motor_cmd[i].kd = self.kd
-                    msg.motor_cmd[i].tau = 0.0
-
-                if (not self.teleop_enabled) and all(abs(angle) < np.radians(2.5) for angle in self.g1_current_joint_angles.values()):
-                    self.current_arm_sdk -= 0.002
+                if (not self.teleop_enabled) and all(abs(angle) < np.radians(2) for angle in self.g1_current_joint_angles.values()):
+                    self.current_arm_sdk -= self.arm_sdk_step
                     if self.current_arm_sdk < 0.0:
                         self.current_arm_sdk = 0.0
                     msg.motor_cmd[G1JointID.NotUsedJoint].q = self.current_arm_sdk
                 elif self.teleop_enabled:
-                    self.current_arm_sdk += 0.002
+                    self.current_arm_sdk += self.arm_sdk_step
                     if self.current_arm_sdk > 1.0:
                         self.current_arm_sdk = 1.0
                     msg.motor_cmd[G1JointID.NotUsedJoint].q = self.current_arm_sdk 
                 
 
-                print(self.current_arm_sdk)
+                # print(self.current_arm_sdk)
                 msg.crc = self.crc.Crc(msg)
-                self.lowcmd_publisher.publish(msg)
-            time.sleep(0.002)
+
+                if  not self.teleop_enabled or self.current_arm_sdk == 1.0:
+                    for i in G1_USED_JOINTS:
+                        # msg.motor_cmd[i].mode = 1
+                        msg.motor_cmd[i].q = self.set_angle(i)
+                        msg.motor_cmd[i].dq = 0.0
+                        msg.motor_cmd[i].kp = self.kp
+                        msg.motor_cmd[i].kd = self.kd
+                        msg.motor_cmd[i].tau = 0.0
+                        self.lowcmd_publisher.publish(msg)
+
+            time.sleep(1/self.publish_frequency)
 
     def current_angles_callback(self, msg):
         for id in self.g1_current_joint_angles.keys():
             self.g1_current_joint_angles[id] = msg.motor_state[id].q
         if not self.current_cmd_initialized:
-            self.g1_current_cmd = self.g1_current_joint_angles
+            self.g1_current_cmd = dict(self.g1_current_joint_angles)
             self.current_cmd_initialized = True
         
         # print(np.degrees(self.g1_current_joint_angles[G1JointID.LeftShoulderRoll]))
