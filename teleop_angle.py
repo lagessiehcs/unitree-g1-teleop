@@ -11,6 +11,8 @@ import numpy as np
 import threading
 import time
 
+import signal
+
 class SensorID():
     Chest = 1
     LowerBack = 2
@@ -189,7 +191,7 @@ G1_JOINT_ID_GROUPS = [
 class G1TeleopNode(Node):
 
     def __init__(self):
-        super().__init__('shoulder_kinematics_node')
+        super().__init__('g1_teleop_node')
         self.imus_subscription = self.create_subscription(
             ImuReadings,
             'sensorsuit/imus',
@@ -214,8 +216,9 @@ class G1TeleopNode(Node):
         
         self.lowcmd_publisher = self.create_publisher(LowCmd, '/lowcmd', 10)
 
-        self.step = 120/self.publish_frequency
-        self.step_sizes = {id: np.radians(self.step) for id in G1_USED_JOINTS}
+        self.step_fast = np.radians(300/self.publish_frequency)
+        self.step_slow = np.radians(120/self.publish_frequency)
+        # self.step_sizes = {id: np.radians(self.step) for id in G1_USED_JOINTS}
         
 
 
@@ -250,13 +253,14 @@ class G1TeleopNode(Node):
         for i, sensor_id_pair in enumerate(SENSOR_ID_PAIRS):
                 self.calib_joint_rotations[i] = sensor_orientations[sensor_id_pair[0]] * sensor_orientations[sensor_id_pair[1]].inv()
 
-        self.get_logger().info("Calibration complete!")
-        input("Press ENTER to start teleop ...")
+        print("Calibration complete!")
+        input("Press ENTER to start teleop...")
         self.teleop_enabled = True
-        print("Starting teleop...")
         while self.current_arm_sdk != 1.0:
+            print("Starting teleop: ", round(100 * self.current_arm_sdk), "%")
             time.sleep(0.1)
-        print("Teleop started!")
+        print("Starting teleop: 100 %")
+        print()
         self.calibrated = True
 
         
@@ -279,20 +283,24 @@ class G1TeleopNode(Node):
     def set_angle(self, index):
         target = self.g1_target_joint_angles[index]
         current_cmd = self.g1_current_cmd[index]
-        step_size = self.step_sizes[index]
+        # step_size = self.step_sizes[index]
         # if target == 0.0 and index in [G1JointID.LeftShoulderRoll, G1JointID.LeftShoulderPitch, G1JointID.RightShoulderRoll, G1JointID.RightShoulderPitch]:
         #     step_size = np.radians(self.step/5)
 
         diff = target-current_cmd
         sign_diff = 1 if diff >= 0 else -1
-  
+
+        if not self.teleop_enabled or abs(diff) > np.radians(15):
+            step_size = self.step_slow
+        else:
+            step_size = self.step_fast
 
         if abs(diff) < step_size:
             current_cmd = target 
         else:
             current_cmd += sign_diff * step_size
 
-        # if index == G1JointID.LeftShoulderPitch:
+        # if index == G1JointID.RightShoulderRoll:
         #     print("current_cmd: ", np.degrees(self.g1_current_cmd[index]))
         #     print("target: ", np.degrees(target))
         #     print("sign_diff: ", sign_diff)
@@ -309,18 +317,20 @@ class G1TeleopNode(Node):
             if self.calibrated:
                 if self.teleop_enabled:
                     input("Teleop is running, press ENTER to stop...")
-                    print("Stopping teleop...")
                     self.teleop_enabled = False
                     while self.current_arm_sdk != 0.0:
+                        print("Stopping teleop: ", round(100 * (1-self.current_arm_sdk)), "%")
                         time.sleep(0.1)
-                    print("Teleop stopped!")
+                    print("Stopping teleop: 100 %")
+                    print()
                 else:
                     input("Teleop is not running, press ENTER to start...")
-                    print("Starting teleop...")
                     self.teleop_enabled = True
                     while self.current_arm_sdk != 1.0:
+                        print("Starting teleop: ", round(100 * self.current_arm_sdk), "%")
                         time.sleep(0.1)
-                    print("Teleop started!")
+                    print("Starting teleop: 100 %")
+                    print()
             time.sleep(0.02)
 
     def publishAngles(self):
@@ -374,9 +384,9 @@ class G1TeleopNode(Node):
         for reading in msg.readings:
 
             quat = [reading.orientation.x,
-                             reading.orientation.y,
-                             reading.orientation.z,
-                             reading.orientation.w]
+                    reading.orientation.y,
+                    reading.orientation.z,
+                    reading.orientation.w]
             
             self.sensor_orientations[reading.id] = R.from_quat(quat)
 
@@ -490,6 +500,7 @@ class G1TeleopNode(Node):
             else:
                 for g1_joint_id in g1_joint_id_group:
                     self.g1_target_joint_angles[g1_joint_id] = 0.0
+
 
     def signed_angle(self, v1, v2, axis, degrees=False):
         v1 = np.array(v1)
@@ -679,6 +690,7 @@ class G1TeleopNode(Node):
 
 
 def main(args=None):
+
     rclpy.init(args=args)
 
     node = G1TeleopNode()
