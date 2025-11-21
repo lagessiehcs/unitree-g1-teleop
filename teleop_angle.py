@@ -204,6 +204,10 @@ class G1TeleopNode(Node):
             self.current_angles_callback,
             10)
         
+        self.shutdown_requested = False
+        self.shutting_down = False
+        self.exit_teleop = False
+        
         self.publish_frequency = 50 #Hz
         
         self.teleop_enabled = False
@@ -241,11 +245,15 @@ class G1TeleopNode(Node):
         self.right_elbow_roll = 0.0
         self.right_elbow_yaw = 0.0
 
-        self.publishAngles_thread = threading.Thread(target=self.publishAngles, daemon=True)
+        self.publishAngles_thread = threading.Thread(target=self.publishAngles)
         self.publishAngles_thread.start()
 
-        self.enableTeleop_thread = threading.Thread(target=self.enableTeleop, daemon=True)
+        self.enableTeleop_thread = threading.Thread(target=self.enableTeleop)
         self.enableTeleop_thread.start()
+        # try:
+        #     self.enableTeleop_thread.start()
+        # except Exception as e:
+        #     print(e)
     
 
     def calibrate(self, sensor_orientations):
@@ -254,14 +262,18 @@ class G1TeleopNode(Node):
                 self.calib_joint_rotations[i] = sensor_orientations[sensor_id_pair[0]] * sensor_orientations[sensor_id_pair[1]].inv()
 
         print("Calibration complete!")
-        input("Press ENTER to start teleop...")
-        self.teleop_enabled = True
-        while self.current_arm_sdk != 1.0:
-            print("Starting teleop: ", round(100 * self.current_arm_sdk), "%")
-            time.sleep(0.1)
-        print("Starting teleop: 100 %")
-        print()
-        self.calibrated = True
+        user_input = input("Press [ENTER] to start teleop or [q] to quit...")
+        if user_input == 'q':
+            self.exit_teleop = True
+            self.shutting_down = True
+        else:
+            self.teleop_enabled = True
+            while self.current_arm_sdk < 1.0:
+                print("Starting teleop: ", round(100 * self.current_arm_sdk), "%")
+                time.sleep(0.1)
+            print("Starting teleop: 100 %")
+            print()
+            self.calibrated = True
 
         
 
@@ -313,49 +325,47 @@ class G1TeleopNode(Node):
     
         
     def enableTeleop(self):
-        while True:
+        while not self.shutting_down:
             if self.calibrated:
                 if self.teleop_enabled:
-                    input("Teleop is running, press ENTER to stop...")
+                    input("Teleop is running, press [ENTER] to stop or [Ctrl+C] to quit...")
                     self.teleop_enabled = False
-                    while self.current_arm_sdk != 0.0:
+                    while self.current_arm_sdk > 0.0 and not self.shutting_down:
                         print("Stopping teleop: ", round(100 * (1-self.current_arm_sdk)), "%")
                         time.sleep(0.1)
-                    print("Stopping teleop: 100 %")
+                    if not self.shutting_down:
+                        print("Stopping teleop: 100 %")
                     print()
                 else:
-                    input("Teleop is not running, press ENTER to start...")
+                    input("Teleop is not running, press [ENTER] to start or [Ctrl+C] to quit...")
                     self.teleop_enabled = True
-                    while self.current_arm_sdk != 1.0:
+                    while self.current_arm_sdk < 1.0 and not self.shutting_down:
                         print("Starting teleop: ", round(100 * self.current_arm_sdk), "%")
                         time.sleep(0.1)
-                    print("Starting teleop: 100 %")
+                    if not self.shutting_down:
+                        print("Starting teleop: 100 %")
                     print()
             time.sleep(0.02)
 
     def publishAngles(self):
-        while True:
+        while not self.exit_teleop:
             if self.current_cmd_initialized:
                 msg = LowCmd()
                 # msg.mode_pr = 0
                 # msg.mode_machine = 4
 
                 if (not self.teleop_enabled) and all(abs(angle) < np.radians(2) for angle in self.g1_current_joint_angles.values()):
-                    self.current_arm_sdk -= self.arm_sdk_step
-                    if self.current_arm_sdk < 0.0:
-                        self.current_arm_sdk = 0.0
+                    self.current_arm_sdk = max(self.current_arm_sdk-self.arm_sdk_step, 0.0)
                     msg.motor_cmd[G1JointID.NotUsedJoint].q = self.current_arm_sdk
                 elif self.teleop_enabled:
-                    self.current_arm_sdk += self.arm_sdk_step
-                    if self.current_arm_sdk > 1.0:
-                        self.current_arm_sdk = 1.0
+                    self.current_arm_sdk = min(self.current_arm_sdk+self.arm_sdk_step, 1.0)            
                     msg.motor_cmd[G1JointID.NotUsedJoint].q = self.current_arm_sdk 
                 
 
                 # print(self.current_arm_sdk)
                 msg.crc = self.crc.Crc(msg)
 
-                if  not self.teleop_enabled or self.current_arm_sdk == 1.0:
+                if not self.teleop_enabled or self.current_arm_sdk == 1.0:
                     for i in G1_USED_JOINTS:
                         # msg.motor_cmd[i].mode = 1
                         msg.motor_cmd[i].q = self.set_angle(i)
@@ -501,6 +511,14 @@ class G1TeleopNode(Node):
                 for g1_joint_id in g1_joint_id_group:
                     self.g1_target_joint_angles[g1_joint_id] = 0.0
 
+    def cleanup(self):
+        self.shutting_down = True
+        self.teleop_enabled = False
+        while self.current_arm_sdk > 0.0:
+            print("Stopping teleop: ", round(100 * (1-self.current_arm_sdk)), "%")
+            time.sleep(0.1)
+        print("Stopping teleop: 100 %")
+        self.exit_teleop = True
 
     def signed_angle(self, v1, v2, axis, degrees=False):
         v1 = np.array(v1)
@@ -688,20 +706,33 @@ class G1TeleopNode(Node):
         # print()
         return pitch, roll, yaw
 
+def sigint_handler(signum, frame):
+    global node
+    node.shutdown_requested = True
+
 
 def main(args=None):
+    global node
 
     rclpy.init(args=args)
 
     node = G1TeleopNode()
 
+    signal.signal(signal.SIGINT, sigint_handler)
+
     try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
+        while rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.1)
+
+            if node.shutdown_requested and not node.shutting_down:
+                shutdown_thread = threading.Thread(target=node.cleanup)
+                shutdown_thread.start()
+
+            if node.current_arm_sdk == 0.0 and node.exit_teleop:
+                break
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.shutdown
 
 
 if __name__ == '__main__':
