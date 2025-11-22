@@ -122,7 +122,7 @@ G1_23_JOINTS = [
     G1JointID.RightWristRoll
 ]
 
-G1_USED_JOINTS = [
+G1_23_UPPERBODY_JOINTS = [
     G1JointID.WaistYaw,
     G1JointID.LeftShoulderPitch,
     G1JointID.LeftShoulderRoll,
@@ -222,7 +222,7 @@ class G1TeleopNode(Node):
 
         self.step_fast = np.radians(300/self.publish_frequency)
         self.step_slow = np.radians(120/self.publish_frequency)
-        # self.step_sizes = {id: np.radians(self.step) for id in G1_USED_JOINTS}
+        # self.step_sizes = {id: np.radians(self.step) for id in G1_23_UPPERBODY_JOINTS}
         
 
 
@@ -230,11 +230,11 @@ class G1TeleopNode(Node):
         self.calib_joint_rotations = [None] * len(SENSOR_ID_PAIRS)
         self.calibrated = False
 
-        self.g1_target_joint_angles = {id: 0.0 for id in G1_USED_JOINTS}
-        self.g1_current_cmd = {id: 0.0 for id in G1_USED_JOINTS}
+        self.g1_target_joint_angles = {id: 0.0 for id in G1_23_UPPERBODY_JOINTS}
+        self.g1_current_cmd = {id: 0.0 for id in G1_23_UPPERBODY_JOINTS}
         self.current_cmd_initialized = False
 
-        self.g1_current_joint_angles = {id: 0.0 for id in G1_USED_JOINTS}
+        self.g1_current_joint_angles = {id: 0.0 for id in G1_23_UPPERBODY_JOINTS}
 
         self.crc = CRC()
 
@@ -366,7 +366,7 @@ class G1TeleopNode(Node):
                 msg.crc = self.crc.Crc(msg)
 
                 if not self.teleop_enabled or self.current_arm_sdk == 1.0:
-                    for i in G1_USED_JOINTS:
+                    for i in G1_23_UPPERBODY_JOINTS:
                         # msg.motor_cmd[i].mode = 1
                         msg.motor_cmd[i].q = self.set_angle(i)
                         msg.motor_cmd[i].dq = 0.0
