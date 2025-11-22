@@ -96,7 +96,7 @@ class G1JointID():
     RightWristYaw = 28    # NOTE: INVALID for g1 23dof
     NotUsedJoint = 29
 
-G1_ACTIVE_JOINTS_23DOF = [
+G1_23_JOINTS = [
     G1JointID.LeftHipPitch,
     G1JointID.LeftHipRoll,
     G1JointID.LeftHipYaw,
