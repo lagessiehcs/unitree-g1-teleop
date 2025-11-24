@@ -12,6 +12,7 @@ import threading
 import time
 
 import signal
+from tqdm import tqdm
 
 class SensorID():
     Chest = 1
@@ -263,15 +264,21 @@ class G1TeleopNode(Node):
 
         print("Calibration complete!")
         user_input = input("Press [ENTER] to start teleop or [q] to quit...")
+
         if user_input == 'q':
             self.exit_teleop = True
             self.shutting_down = True
         else:
             self.teleop_enabled = True
+            pbar = tqdm(total=100,desc = "Starting teleop", bar_format="{l_bar}{bar}")
+            prev=0
             while self.current_arm_sdk < 1.0:
-                print("Starting teleop: ", round(100 * self.current_arm_sdk), "%")
+                current = int(100 * self.current_arm_sdk)
+                pbar.update(abs(prev-current))
+                prev = current
                 time.sleep(0.1)
-            print("Starting teleop: 100 %")
+            pbar.update(abs(prev-100))
+            pbar.close()
             print()
             self.calibrated = True
 
@@ -330,20 +337,29 @@ class G1TeleopNode(Node):
                 if self.teleop_enabled:
                     input("Teleop is running, press [ENTER] to stop or [Ctrl+C] to quit...")
                     self.teleop_enabled = False
+                    pbar = tqdm(total=100,desc = "Stopping teleop", bar_format="{l_bar}{bar}")
+                    prev=0
                     while self.current_arm_sdk > 0.0 and not self.shutting_down:
-                        print("Stopping teleop: ", round(100 * (1-self.current_arm_sdk)), "%")
+                        current = int(100 * (1-self.current_arm_sdk))
+                        pbar.update(abs(prev-current))
+                        prev = current
                         time.sleep(0.1)
-                    if not self.shutting_down:
-                        print("Stopping teleop: 100 %")
+                    pbar.update(abs(prev-100))
+                    pbar.close()
                     print()
+                
                 else:
                     input("Teleop is not running, press [ENTER] to start or [Ctrl+C] to quit...")
                     self.teleop_enabled = True
+                    pbar = tqdm(total=100,desc = "Starting teleop", bar_format="{l_bar}{bar}")
+                    prev=0  
                     while self.current_arm_sdk < 1.0 and not self.shutting_down:
-                        print("Starting teleop: ", round(100 * self.current_arm_sdk), "%")
+                        current = int(100 * self.current_arm_sdk)
+                        pbar.update(abs(prev-current))
+                        prev = current
                         time.sleep(0.1)
-                    if not self.shutting_down:
-                        print("Starting teleop: 100 %")
+                    pbar.update(abs(prev-100))
+                    pbar.close()
                     print()
             time.sleep(0.02)
 
@@ -514,10 +530,16 @@ class G1TeleopNode(Node):
     def cleanup(self):
         self.shutting_down = True
         self.teleop_enabled = False
+        pbar = tqdm(total=100,desc = "Stopping teleop", bar_format="{l_bar}{bar}")
+        prev=0
         while self.current_arm_sdk > 0.0:
-            print("Stopping teleop: ", round(100 * (1-self.current_arm_sdk)), "%")
+            current = int(100 * (1-self.current_arm_sdk))
+            pbar.update(abs(prev-current))
+            prev = current
             time.sleep(0.1)
-        print("Stopping teleop: 100 %")
+        pbar.update(abs(prev-100))
+        pbar.close()
+        print()
         self.exit_teleop = True
 
     def signed_angle(self, v1, v2, axis, degrees=False):
