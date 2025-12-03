@@ -199,30 +199,31 @@ class G1TeleopNode(Node):
             self.listener_callback,
             10)
         
-        self.current_angles_subscription = self.create_subscription(
-            LowState,
-            'lowstate',
-            self.current_angles_callback,
-            10)
+        # self.current_angles_subscription = self.create_subscription(
+        #     LowState,
+        #     'lowstate',
+        #     self.current_angles_callback,
+        #     10)
         
         self.shutdown_requested = False
         self.shutting_down = False
         self.exit_teleop = False
-        
-        self.publish_frequency = 50 #Hz
+                
+        self.publish_frequency = 500 #Hz
         
         self.teleop_enabled = False
-        self. current_arm_sdk = 0.0
-        self. arm_sdk_step = 0.4/self.publish_frequency
+        self.current_arm_sdk = 0.0
         
         # PD gains
         self.kp = 50.0
         self.kd = 1.0
         
-        self.lowcmd_publisher = self.create_publisher(LowCmd, '/lowcmd', 10)
+        self.lowcmd_publisher = self.create_publisher(LowCmd, '/arm_sdk', 10)
 
-        self.step_fast = np.radians(300/self.publish_frequency)
-        self.step_slow = np.radians(120/self.publish_frequency)
+        self.step_fast = np.radians(2)
+        self.step_med = np.radians(1)
+        self.step_slow = np.radians(0.5)
+        self.arm_sdk_step = 0.002
         # self.step_sizes = {id: np.radians(self.step) for id in G1_23_UPPERBODY_JOINTS}
         
 
@@ -264,13 +265,14 @@ class G1TeleopNode(Node):
 
         print("Calibration complete!")
         user_input = input("Press [ENTER] to start teleop or [q] to quit...")
+        print()
 
         if user_input == 'q':
             self.exit_teleop = True
             self.shutting_down = True
         else:
             self.teleop_enabled = True
-            pbar = tqdm(total=100,desc = "Starting teleop", bar_format="{l_bar}{bar}")
+            pbar = tqdm(total=100, ncols=60, desc = "Starting teleop", bar_format="{l_bar}{bar}")
             prev=0
             while self.current_arm_sdk < 1.0:
                 current = int(100 * self.current_arm_sdk)
@@ -279,6 +281,7 @@ class G1TeleopNode(Node):
                 time.sleep(0.1)
             pbar.update(abs(prev-100))
             pbar.close()
+            print()
             print()
             self.calibrated = True
 
@@ -300,6 +303,7 @@ class G1TeleopNode(Node):
     #         return target
     
     def set_angle(self, index):
+
         target = self.g1_target_joint_angles[index]
         current_cmd = self.g1_current_cmd[index]
         # step_size = self.step_sizes[index]
@@ -309,8 +313,10 @@ class G1TeleopNode(Node):
         diff = target-current_cmd
         sign_diff = 1 if diff >= 0 else -1
 
-        if not self.teleop_enabled or abs(diff) > np.radians(15):
+        if not self.teleop_enabled:
             step_size = self.step_slow
+        elif abs(diff) > np.radians(20):
+            step_size = self.step_med
         else:
             step_size = self.step_fast
 
@@ -336,8 +342,9 @@ class G1TeleopNode(Node):
             if self.calibrated:
                 if self.teleop_enabled:
                     input("Teleop is running, press [ENTER] to stop or [Ctrl+C] to quit...")
+                    print()
                     self.teleop_enabled = False
-                    pbar = tqdm(total=100,desc = "Stopping teleop", bar_format="{l_bar}{bar}")
+                    pbar = tqdm(total=100, ncols=60, desc = "Stopping teleop", bar_format="{l_bar}{bar}")
                     prev=0
                     while self.current_arm_sdk > 0.0 and not self.shutting_down:
                         current = int(100 * (1-self.current_arm_sdk))
@@ -347,11 +354,13 @@ class G1TeleopNode(Node):
                     pbar.update(abs(prev-100))
                     pbar.close()
                     print()
+                    print()
                 
                 else:
                     input("Teleop is not running, press [ENTER] to start or [Ctrl+C] to quit...")
+                    print()
                     self.teleop_enabled = True
-                    pbar = tqdm(total=100,desc = "Starting teleop", bar_format="{l_bar}{bar}")
+                    pbar = tqdm(total=100, ncols=60, desc = "Starting teleop", bar_format="{l_bar}{bar}")
                     prev=0  
                     while self.current_arm_sdk < 1.0 and not self.shutting_down:
                         current = int(100 * self.current_arm_sdk)
@@ -361,45 +370,46 @@ class G1TeleopNode(Node):
                     pbar.update(abs(prev-100))
                     pbar.close()
                     print()
+                    print()
             time.sleep(0.02)
 
     def publishAngles(self):
         while not self.exit_teleop:
-            if self.current_cmd_initialized:
+            if True: #self.current_cmd_initialized:
                 msg = LowCmd()
                 # msg.mode_pr = 0
                 # msg.mode_machine = 4
-
-                if (not self.teleop_enabled) and all(abs(angle) < np.radians(2) for angle in self.g1_current_joint_angles.values()):
+                if not self.teleop_enabled: #and all(abs(angle) < np.radians(2) for angle in self.g1_current_joint_angles.values()):
                     self.current_arm_sdk = max(self.current_arm_sdk-self.arm_sdk_step, 0.0)
                     msg.motor_cmd[G1JointID.NotUsedJoint].q = self.current_arm_sdk
                 elif self.teleop_enabled:
                     self.current_arm_sdk = min(self.current_arm_sdk+self.arm_sdk_step, 1.0)            
                     msg.motor_cmd[G1JointID.NotUsedJoint].q = self.current_arm_sdk 
                 
-
                 # print(self.current_arm_sdk)
-                msg.crc = self.crc.Crc(msg)
 
-                if not self.teleop_enabled or self.current_arm_sdk == 1.0:
-                    for i in G1_23_UPPERBODY_JOINTS:
-                        # msg.motor_cmd[i].mode = 1
-                        msg.motor_cmd[i].q = self.set_angle(i)
-                        msg.motor_cmd[i].dq = 0.0
-                        msg.motor_cmd[i].kp = self.kp
-                        msg.motor_cmd[i].kd = self.kd
-                        msg.motor_cmd[i].tau = 0.0
-                        self.lowcmd_publisher.publish(msg)
+                # if not self.teleop_enabled or self.current_arm_sdk == 1.0:
+                for i in G1_23_UPPERBODY_JOINTS:
+                    # msg.motor_cmd[i].mode = 1
+                    msg.motor_cmd[i].q = self.set_angle(i)
+                    msg.motor_cmd[i].dq = 0.0
+                    msg.motor_cmd[i].kp = self.kp
+                    msg.motor_cmd[i].kd = self.kd
+                    msg.motor_cmd[i].tau = 0.0
+
+                msg.crc = self.crc.Crc(msg)
+                self.lowcmd_publisher.publish(msg)
 
             time.sleep(1/self.publish_frequency)
 
     def current_angles_callback(self, msg):
         for id in self.g1_current_joint_angles.keys():
             self.g1_current_joint_angles[id] = msg.motor_state[id].q
-        if not self.current_cmd_initialized:
+        # if not self.current_cmd_initialized:
+        #     self.g1_current_cmd = dict(self.g1_current_joint_angles)
+        #     self.current_cmd_initialized = True
+        if not self.teleop_enabled:
             self.g1_current_cmd = dict(self.g1_current_joint_angles)
-            self.current_cmd_initialized = True
-        
         # print(np.degrees(self.g1_current_joint_angles[G1JointID.LeftShoulderRoll]))
         # print(np.degrees(self.g1_target_joint_angles[G1JointID.LeftShoulderRoll]))
         # print()
@@ -425,7 +435,7 @@ class G1TeleopNode(Node):
             return
 
         for calib_joint_rotation, sensor_id_pair, g1_joint_id_group  in zip(self.calib_joint_rotations, SENSOR_ID_PAIRS, G1_JOINT_ID_GROUPS):
-            if self.teleop_enabled:
+            if True:
                 joint_rotation = self.sensor_orientations[sensor_id_pair[0]].inv() * calib_joint_rotation * self.sensor_orientations[sensor_id_pair[1]]
                 rot_matrix = joint_rotation.as_matrix() # Rotation matrix representing the orientation of the sensor 0 w.r.t. the sensor 1
                 
@@ -523,14 +533,14 @@ class G1TeleopNode(Node):
                 else:
                     for g1_joint_id in g1_joint_id_group:
                         self.g1_target_joint_angles[g1_joint_id] = 0.0
-            else:
-                for g1_joint_id in g1_joint_id_group:
-                    self.g1_target_joint_angles[g1_joint_id] = 0.0
+            # else:
+            #     for g1_joint_id in g1_joint_id_group:
+            #         self.g1_target_joint_angles[g1_joint_id] = 0.0
 
     def cleanup(self):
         self.shutting_down = True
         self.teleop_enabled = False
-        pbar = tqdm(total=100,desc = "Stopping teleop", bar_format="{l_bar}{bar}")
+        pbar = tqdm(total=100, ncols=60, desc = "Stopping teleop", bar_format="{l_bar}{bar}")
         prev=0
         while self.current_arm_sdk > 0.0:
             current = int(100 * (1-self.current_arm_sdk))
@@ -603,6 +613,8 @@ class G1TeleopNode(Node):
         # Yaw calculation
         sign = 1 if y_parent[2]>0 else -1
         theta_x = abs(sign*np.arccos(y_parent[1])) # rotation around x
+        if roll>np.pi/2:
+            theta_x = -theta_x
 
         # if side == "left":
         #     print("theta_x: ",theta_x)
@@ -616,10 +628,12 @@ class G1TeleopNode(Node):
         z_1 = rot_matrix[:,2] # with yaw
 
         yaw = self.signed_angle(z_0, z_1, y_parent, degrees=False)
-        if roll >= np.radians(135):
-            yaw = -yaw
+        # if roll >= np.radians(135):
+        #     yaw = -yaw
         sign = 1 if yaw >=0 else -1
-        
+
+        roll += np.radians(15) * abs(pitch) / np.radians(90)
+
         if side == "right":
             roll = -roll
 
@@ -744,7 +758,7 @@ def main(args=None):
 
     try:
         while rclpy.ok():
-            rclpy.spin_once(node, timeout_sec=0.1)
+            rclpy.spin_once(node, timeout_sec=0.001)
 
             if node.shutdown_requested and not node.shutting_down:
                 shutdown_thread = threading.Thread(target=node.cleanup)
