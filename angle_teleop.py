@@ -193,9 +193,12 @@ G1_JOINT_ID_GROUPS = [
 
 class G1TeleopNode(Node):
 
-    def __init__(self, upperbody):
+    def __init__(self, mode):
 
-        self.upperbody = upperbody
+        if mode == "whole-body":
+            self.upperbody = False
+        else:
+            self.upperbody = True        
 
         super().__init__('g1_teleop_node')
         self.imus_subscription = self.create_subscription(
@@ -218,6 +221,53 @@ class G1TeleopNode(Node):
             teleop_topic = '/lowcmd'
             self.robot_joints = G1_JOINTS_23DOF
 
+        self.link_id_to_base_id_mapping = {
+            SensorID.ThighLeft: SensorID.LowerBack,           # Left hip
+            SensorID.ShankLeft: SensorID.ThighLeft,           # Left knee
+            SensorID.FootLeft: SensorID.ShankLeft,            # Left ankle
+            SensorID.ThighRight: SensorID.LowerBack,          # Right hip
+            SensorID.ShankRight: SensorID.ThighRight,         # Right knee
+            SensorID.FootRight: SensorID.ShankRight,          # Right ankle
+            SensorID.LowerBack: SensorID.UpperBack,           # Waist
+            SensorID.UpperArmLeft: SensorID.ShoulderLeft,     # Left shoulder
+            SensorID.ForearmLeft: SensorID.UpperArmLeft,      # Left elbow
+            SensorID.HandLeft: SensorID.ForearmLeft,          # Left wrist
+            SensorID.UpperArmRight: SensorID.ShoulderRight,   # Right shoulder
+            SensorID.ForearmRight: SensorID.UpperArmRight,    # Right elbow
+            SensorID.HandRight: SensorID.ForearmRight,        # Right wrist
+        }
+
+        self.link_id_to_joint_id_group_mapping = {
+            SensorID.ThighLeft: [G1JointID.LeftHipPitch, G1JointID.LeftHipRoll, G1JointID.LeftHipYaw],                      # Left hip
+            SensorID.ShankLeft: [G1JointID.LeftKnee],                                                                       # Left knee
+            SensorID.FootLeft: [G1JointID.LeftAnklePitch, G1JointID.LeftAnkleRoll],                                        # Left ankle
+            SensorID.ThighRight: [G1JointID.RightHipPitch, G1JointID.RightHipRoll, G1JointID.RightHipYaw],                   # Right hip
+            SensorID.ShankRight: [G1JointID.RightKnee],                                                                      # Right knee
+            SensorID.FootRight: [G1JointID.RightAnklePitch, G1JointID.RightAnkleRoll],                                      # Right ankle
+            SensorID.LowerBack: [G1JointID.WaistYaw],                                                                       # Waist
+            SensorID.UpperArmLeft: [G1JointID.LeftShoulderPitch, G1JointID.LeftShoulderRoll, G1JointID.LeftShoulderYaw],       # Left shoulder
+            SensorID.ForearmLeft: [G1JointID.LeftElbow],                                                                      # Left elbow
+            SensorID.HandLeft: [G1JointID.LeftWristRoll],                                                                  # Left wrist
+            SensorID.UpperArmRight: [G1JointID.RightShoulderPitch, G1JointID.RightShoulderRoll, G1JointID.RightShoulderYaw],    # Right shoulder
+            SensorID.ForearmRight: [G1JointID.RightElbow],                                                                     # Right elbow
+            SensorID.HandRight: [G1JointID.RightWristRoll],       
+        }
+        self.offset_lowerback = 10.0 # degrees
+        self.offset_orientation = {
+            SensorID.ThighLeft:     R.from_euler('XYZ', [self.offset_lowerback, -90.0, 0.0], degrees=True),
+            SensorID.ShankLeft:     R.from_euler('XYZ', [0.0, 0.0, 0.0], degrees=True),
+            SensorID.FootLeft:      R.from_euler('XYZ', [-90.0, 0.0, -90.0], degrees=True),
+            SensorID.ThighRight:    R.from_euler('XYZ', [self.offset_lowerback, 90.0, 0.0], degrees=True),
+            SensorID.ShankRight:    R.from_euler('XYZ', [0.0, 0.0, 0.0], degrees=True),
+            SensorID.FootRight:     R.from_euler('XYZ', [-90.0, 0.0, 90.0], degrees=True),
+            SensorID.LowerBack:     R.from_euler('XYZ', [self.offset_lowerback, 0.0, 0.0], degrees=True),
+            SensorID.UpperArmLeft:  R.from_euler('XYZ', [0.0, 0.0, 0.0], degrees=True),
+            SensorID.ForearmLeft:   R.from_euler('XYZ', [0.0, 0.0, 0.0], degrees=True),
+            SensorID.HandLeft:      R.from_euler('XYZ', [0.0, 0.0, 0.0], degrees=True),
+            SensorID.UpperArmRight: R.from_euler('XYZ', [0.0, 0.0, 0.0], degrees=True),
+            SensorID.ForearmRight:  R.from_euler('XYZ', [0.0, 0.0, 0.0], degrees=True),
+            SensorID.HandRight:     R.from_euler('XYZ', [0.0, 0.0, 0.0], degrees=True),
+        }
         
         self.shutdown_requested = False
         self.shutting_down = False
@@ -240,7 +290,7 @@ class G1TeleopNode(Node):
         self.arm_sdk_step = 0.002
 
         # IMU IDs
-        self.calib_joint_rotations = [None] * len(SENSOR_ID_PAIRS)
+        self.calib_orientations = {id: None for id in self.link_id_to_base_id_mapping}
         self.calibrated = False
 
         self.g1_target_joint_angles = {id: 0.0 for id in self.robot_joints}
@@ -258,6 +308,11 @@ class G1TeleopNode(Node):
         self.right_elbow_roll = 0.0
         self.right_elbow_yaw = 0.0
 
+        self.left_knee_roll = 0.0
+        self.left_knee_yaw = 0.0
+        self.right_knee_roll = 0.0
+        self.right_knee_yaw = 0.0
+
         self.publishAngles_thread = threading.Thread(target=self.publishAngles)
         self.publishAngles_thread.start()
 
@@ -267,8 +322,8 @@ class G1TeleopNode(Node):
 
     def calibrate(self, sensor_orientations):
         """Calibrate once using a known pose."""
-        for i, sensor_id_pair in enumerate(SENSOR_ID_PAIRS):
-                self.calib_joint_rotations[i] = sensor_orientations[sensor_id_pair[0]] * sensor_orientations[sensor_id_pair[1]].inv()
+        for link_id, base_id in self.link_id_to_base_id_mapping.items():
+                self.calib_orientations[link_id] = sensor_orientations[base_id] * self.offset_orientation[link_id] * sensor_orientations[link_id].inv()
 
         print("Calibration complete!")
         user_input = input("Press [ENTER] to start teleop or [q] to quit...")
@@ -445,12 +500,13 @@ class G1TeleopNode(Node):
             self.calibrate(self.sensor_orientations)
             return
 
-        for calib_joint_rotation, sensor_id_pair, g1_joint_id_group  in zip(self.calib_joint_rotations, SENSOR_ID_PAIRS, G1_JOINT_ID_GROUPS):
+        for link_id, joint_id_group in self.link_id_to_joint_id_group_mapping.items():
             if self.upperbody or self.teleop_enabled:
-                joint_rotation = self.sensor_orientations[sensor_id_pair[0]].inv() * calib_joint_rotation * self.sensor_orientations[sensor_id_pair[1]]
+                base_id = self.link_id_to_base_id_mapping[link_id]
+                joint_rotation = self.sensor_orientations[base_id].inv() * self.calib_orientations[link_id] * self.sensor_orientations[link_id]
                 rot_matrix = joint_rotation.as_matrix() # Rotation matrix representing the orientation of the sensor 0 w.r.t. the sensor 1
                 
-                if sensor_id_pair == [SensorID.ShoulderLeft, SensorID.UpperArmLeft]:
+                if link_id == SensorID.UpperArmLeft:
                     angles = self.pry_shoulder(rot_matrix, "left")
 
                     # print(np.degrees(angles[0]))
@@ -458,13 +514,13 @@ class G1TeleopNode(Node):
                     # print(np.degrees(angles[2]))
                     # print()
 
-                    for g1_joint_id, angle in zip(g1_joint_id_group, angles):
-                        # if abs(self.g1_target_joint_angles[g1_joint_id] - angle) < np.radians(200):
-                        #     self.g1_target_joint_angles[g1_joint_id] = angle
-                        self.g1_target_joint_angles[g1_joint_id] = angle
+                    for joint_id, angle in zip(joint_id_group, angles):
+                        # if abs(self.g1_target_joint_angles[joint_id] - angle) < np.radians(200):
+                        #     self.g1_target_joint_angles[joint_id] = angle
+                        self.g1_target_joint_angles[joint_id] = angle
                     self.g1_target_joint_angles[G1JointID.LeftShoulderYaw] += self.left_elbow_roll
                 
-                elif sensor_id_pair == [SensorID.ShoulderRight, SensorID.UpperArmRight]:
+                elif link_id == SensorID.UpperArmRight:
                     angles = self.pry_shoulder(rot_matrix, "right")
 
                     # print(np.degrees(angles[0]))
@@ -472,13 +528,13 @@ class G1TeleopNode(Node):
                     # print(np.degrees(angles[2]))
                     # print()
 
-                    for g1_joint_id, angle in zip(g1_joint_id_group, angles):
-                        # if abs(self.g1_target_joint_angles[g1_joint_id] - angle) < np.radians(200):
-                        #     self.g1_target_joint_angles[g1_joint_id] = angle
-                        self.g1_target_joint_angles[g1_joint_id] = angle
+                    for joint_id, angle in zip(joint_id_group, angles):
+                        # if abs(self.g1_target_joint_angles[joint_id] - angle) < np.radians(200):
+                        #     self.g1_target_joint_angles[joint_id] = angle
+                        self.g1_target_joint_angles[joint_id] = angle
                     self.g1_target_joint_angles[G1JointID.RightShoulderYaw] += self.right_elbow_roll
                 
-                elif sensor_id_pair == [SensorID.UpperArmLeft, SensorID.ForearmLeft]:
+                elif link_id == SensorID.ForearmLeft:
                     pitch, roll, yaw = self.pr_elbow(rot_matrix, "left")
 
                     # print(np.degrees(pitch))
@@ -486,13 +542,13 @@ class G1TeleopNode(Node):
                     # print(np.degrees(yaw))
                     # print()
 
-                    self.g1_target_joint_angles[g1_joint_id_group[0]] = pitch
+                    self.g1_target_joint_angles[joint_id_group[0]] = pitch
                     self.left_elbow_roll = roll
                     self.left_elbow_yaw = yaw
 
-                    # print(g1_joint_id_group)
+                    # print(joint_id_group)
                 
-                elif sensor_id_pair == [SensorID.UpperArmRight, SensorID.ForearmRight]:
+                elif link_id == SensorID.ForearmRight:
                     pitch, roll, yaw = self.pr_elbow(rot_matrix, "right")
 
                     # print(np.degrees(pitch))
@@ -500,24 +556,24 @@ class G1TeleopNode(Node):
                     # print(np.degrees(yaw))
                     # print()
 
-                    self.g1_target_joint_angles[g1_joint_id_group[0]] = pitch
+                    self.g1_target_joint_angles[joint_id_group[0]] = pitch
                     self.right_elbow_roll = roll
                     self.right_elbow_yaw = yaw
 
-                    # print(g1_joint_id_group)
+                    # print(joint_id_group)
 
-                elif sensor_id_pair == [SensorID.ForearmLeft, SensorID.HandLeft]:
+                elif link_id == SensorID.HandLeft:
                     pitch, roll, yaw = self.pry_wrist(rot_matrix, "left")
 
                     # print(np.degrees(pitch))
                     # print(np.degrees(roll))
                     # print()
 
-                    self.g1_target_joint_angles[g1_joint_id_group[0]] = roll + self.left_elbow_yaw
+                    self.g1_target_joint_angles[joint_id_group[0]] = roll + self.left_elbow_yaw
 
-                    # print(g1_joint_id_group)
+                    # print(joint_id_group)
 
-                elif sensor_id_pair == [SensorID.ForearmRight, SensorID.HandRight]:
+                elif link_id == SensorID.HandRight:
                     pitch, roll, yaw = self.pry_wrist(rot_matrix, "right")
 
                     # print(np.degrees(pitch))
@@ -525,11 +581,11 @@ class G1TeleopNode(Node):
                     # print(np.degrees(yaw))
                     # print()
 
-                    self.g1_target_joint_angles[g1_joint_id_group[0]] = roll + self.right_elbow_yaw
+                    self.g1_target_joint_angles[joint_id_group[0]] = roll + self.right_elbow_yaw
 
-                    # print(g1_joint_id_group)
+                    # print(joint_id_group)
 
-                elif sensor_id_pair == [SensorID.UpperBack, SensorID.LowerBack]:
+                elif link_id == SensorID.LowerBack:
                     pitch, roll, yaw = self.pry_waist(rot_matrix)
 
                     # print(np.degrees(pitch))
@@ -537,16 +593,108 @@ class G1TeleopNode(Node):
                     # print(np.degrees(yaw))
                     # print()
 
-                    self.g1_target_joint_angles[g1_joint_id_group[0]] = roll
+                    self.g1_target_joint_angles[joint_id_group[0]] = roll
 
-                    # print(g1_joint_id_group)
+                    # print(joint_id_group)
+                
+                elif not self.upperbody:
 
-                else:
-                    for g1_joint_id in g1_joint_id_group:
-                        self.g1_target_joint_angles[g1_joint_id] = 0.0
+                    if link_id == SensorID.ThighLeft:
+                        angles = self.pry_hip(rot_matrix, "left")
+
+                        # print(np.degrees(angles[0]))
+                        # print(np.degrees(angles[1]))
+                        # print(np.degrees(angles[2]))
+                        # print()
+
+                        for joint_id, angle in zip(joint_id_group, angles):
+                            # if abs(self.g1_target_joint_angles[joint_id] - angle) < np.radians(200):
+                            #     self.g1_target_joint_angles[joint_id] = angle
+                            self.g1_target_joint_angles[joint_id] = angle
+                        self.g1_target_joint_angles[G1JointID.LeftHipYaw] += self.left_knee_roll
+                    
+                    elif link_id == SensorID.ThighRight:
+                        angles = self.pry_hip(rot_matrix, "right")
+
+                        # print(np.degrees(angles[0]))
+                        # print(np.degrees(angles[1]))
+                        # print(np.degrees(angles[2]))
+                        # print()
+
+                        for joint_id, angle in zip(joint_id_group, angles):
+                            # if abs(self.g1_target_joint_angles[joint_id] - angle) < np.radians(200):
+                            #     self.g1_target_joint_angles[joint_id] = angle
+                            self.g1_target_joint_angles[joint_id] = angle
+                        self.g1_target_joint_angles[G1JointID.RightHipYaw] += self.right_knee_roll
+
+                    elif link_id == SensorID.ShankLeft:
+                        pitch, roll, yaw = self.pr_knee(rot_matrix, "left")
+
+                        # print(np.degrees(pitch))
+                        # print(np.degrees(roll))
+                        # print(np.degrees(yaw))
+                        # print()
+
+                        self.g1_target_joint_angles[joint_id_group[0]] = pitch
+                        self.left_knee_roll = roll
+                        self.left_knee_yaw = yaw
+
+                        # print(joint_id_group)
+                    
+                    elif link_id == SensorID.ShankRight:
+                        pitch, roll, yaw = self.pr_knee(rot_matrix, "right")
+
+                        # print(np.degrees(pitch))
+                        # print(np.degrees(roll))
+                        # print(np.degrees(yaw))
+                        # print()
+
+                        self.g1_target_joint_angles[joint_id_group[0]] = pitch
+                        self.right_knee_roll = roll
+                        self.right_knee_yaw = yaw
+
+                        # print(joint_id_group)
+
+                    elif link_id == SensorID.FootLeft:
+                        pitch, roll, yaw = self.pr_foot(rot_matrix, "left")
+
+                        # print(np.degrees(pitch))
+                        # print(np.degrees(roll))
+                        # print(np.degrees(yaw))
+                        # print()
+
+                        pitch_and_roll = [pitch, roll]
+
+                        for joint_id, angle in zip(joint_id_group, pitch_and_roll):
+                            # if abs(self.g1_target_joint_angles[joint_id] - angle) < np.radians(200):
+                            #     self.g1_target_joint_angles[joint_id] = angle
+                            self.g1_target_joint_angles[joint_id] = angle
+
+                        # print(joint_id_group)
+                    
+                    elif link_id == SensorID.FootRight:
+                        pitch, roll, yaw = self.pr_foot(rot_matrix, "right")
+
+                        # print(np.degrees(pitch))
+                        # print(np.degrees(roll))
+                        # print(np.degrees(yaw))
+                        # print()
+
+                        pitch_and_roll = [pitch, roll]
+
+                        for joint_id, angle in zip(joint_id_group, pitch_and_roll):
+                            # if abs(self.g1_target_joint_angles[joint_id] - angle) < np.radians(200):
+                            #     self.g1_target_joint_angles[joint_id] = angle
+                            self.g1_target_joint_angles[joint_id] = angle
+
+                        # print(joint_id_group)
+
+                    else:
+                        for joint_id in joint_id_group:
+                            self.g1_target_joint_angles[joint_id] = 0.0
             else:
-                for g1_joint_id in g1_joint_id_group:
-                    self.g1_target_joint_angles[g1_joint_id] = 0.0
+                for joint_id in joint_id_group:
+                    self.g1_target_joint_angles[joint_id] = 0.0
 
     def cleanup(self):
         self.shutting_down = True
@@ -757,7 +905,212 @@ class G1TeleopNode(Node):
         # print(np.degrees(yaw))
         # print()
         return pitch, roll, yaw
+    
+    def pry_hip(self, rot_matrix, side):
+        y_parent = rot_matrix[:,1] # local y-axis represented in hip frame 
+        # if side == "left":
+        #     print("y")
+        #     print(y_parent[0])
+        #     print(y_parent[1])
+        #     print(y_parent[2])
+        #     print()
 
+
+        # Pitch calculation
+        eps = 0.2
+        k = 5
+
+        r = np.hypot(y_parent[2], y_parent[1])
+        
+        w = 1.0 - np.exp(- (r / eps)**k) # Filter for pitch angle near x-axis
+
+        if self.g1_target_joint_angles[G1JointID.LeftHipRoll] < np.pi/2:
+            pitch = -w * np.arctan2(y_parent[2],y_parent[1]) 
+        else:
+            pitch = w * np.arctan2(y_parent[2],-y_parent[1])
+
+        # Roll calculation
+        roll = np.arcsin(y_parent[0]) if y_parent[1]>=0 or abs(pitch) > np.pi/2 else np.pi-np.arcsin(y_parent[0])
+        # print("Roll         ", np.degrees(roll))
+        # print("y_parent:   ", y_parent)
+        # print("pitch:       ", np.degrees(pitch))
+        # print()
+        # Yaw calculation
+        sign = 1 if y_parent[1]>0 else -1
+        theta_z = abs(sign*np.arccos(y_parent[0])) # rotation around z
+        if roll>np.pi/2:
+            theta_z = -theta_z
+
+        # if side == "left":
+        #     print("theta_z: ",theta_z)
+        
+        theta_x = -pitch #if side == "left" else pitch # rotation around x
+    
+        rot = R.from_euler('XZ', [theta_x, theta_z], degrees=False)
+        
+        R_mat_no_yaw = rot.as_matrix()
+        x_0 = R_mat_no_yaw[:,1] # without yaw
+        z_1 = rot_matrix[:,2] # with yaw
+
+        if side == "right":
+            x_0 = -x_0
+
+        yaw = self.signed_angle(x_0, z_1, y_parent, degrees=False)
+        # if roll >= np.radians(135):
+        #     yaw = -yaw
+        sign = 1 if yaw >=0 else -1
+
+        # if side == "right":
+        #     roll = -roll
+        pitch += np.radians(self.offset_lowerback)
+
+        return pitch, roll, yaw
+    
+    def pr_knee(self, rot_matrix, side):
+        y_parent = rot_matrix[:,1] # local y-axis represented in shoulder frame 
+
+        # print(y_parent[0])
+        # print(y_parent[1])
+        # print(y_parent[2])
+        # print()
+
+        # Pitch calculation
+        sign = 1 if y_parent[0]>0 else -1
+        pitch = sign * np.arccos(y_parent[1]) 
+
+        # Roll calculation
+        eps = 0.2
+        k = 5
+        r = np.hypot(y_parent[0], y_parent[2])
+        w = 1.0 - np.exp(- (r / eps)**k) # Filter for pitch angle near y-axis
+
+        if side == "left":
+            # print("pitch: ", pitch)
+            if pitch > 0:
+                unfiltered_roll = np.arctan2(y_parent[2],y_parent[0])
+                sign_roll = -1
+            else:
+                unfiltered_roll = np.arctan2(y_parent[2],-y_parent[0])
+                sign_roll = 1
+            roll = sign_roll * w * unfiltered_roll
+
+        elif side == "right":
+            if pitch <= 0:
+                unfiltered_roll = np.arctan2(y_parent[2],-y_parent[0])
+                sign_roll = 1
+            else:
+                unfiltered_roll = np.arctan2(y_parent[2],y_parent[0])
+                sign_roll = -1
+            roll = sign_roll * w * unfiltered_roll
+            
+
+        # Yaw calculation
+        sign = 1 if y_parent[0]>0 else -1
+
+        theta_z = abs(sign*np.arccos(y_parent[1])) # rotation around z
+        if side == "left":
+            theta_y = roll   # rotation around y
+        elif side == "right":
+            theta_y = roll   # rotation around y
+
+        
+        
+        rot = R.from_euler('YZ', [theta_y, theta_z], degrees=False)
+        
+        R_mat_no_yaw = rot.as_matrix()
+        z_0 = R_mat_no_yaw[:,2] # without yaw
+        z_1 = rot_matrix[:,2] # with yaw
+
+        # if side == "right":
+        #     print(z_0)
+        #     print(z_1)
+        #     print()
+
+        yaw = self.signed_angle(z_0, z_1, y_parent, degrees=False)
+        yaw = -yaw
+
+        if side == "left":
+            pitch = -pitch  
+
+        # print(np.degrees(yaw))
+
+        return pitch, roll, yaw
+    
+    def pr_foot(self, rot_matrix, side):
+        y_parent = rot_matrix[:,1] # local y-axis represented in shoulder frame 
+
+        # print(y_parent[0])
+        # print(y_parent[1])
+        # print(y_parent[2])
+        # print()
+
+        # Pitch calculation
+        sign = 1 if y_parent[0]>0 else -1
+        pitch = sign * np.arccos(y_parent[1]) 
+
+        # Roll calculation
+        eps = 0.2
+        k = 5
+        r = np.hypot(y_parent[0], y_parent[2])
+        w = 1.0 - np.exp(- (r / eps)**k) # Filter for pitch angle near y-axis
+
+        if side == "left":
+            # print("pitch: ", pitch)
+            if pitch > 0:
+                unfiltered_yaw = np.arctan2(y_parent[2],y_parent[0])
+                sign_yaw = -1
+            else:
+                unfiltered_yaw = np.arctan2(y_parent[2],-y_parent[0])
+                sign_yaw = 1
+            yaw = sign_yaw * w * unfiltered_yaw
+
+        elif side == "right":
+            if pitch <= 0:
+                unfiltered_yaw = np.arctan2(y_parent[2],-y_parent[0])
+                sign_yaw = 1
+            else:
+                unfiltered_yaw = np.arctan2(y_parent[2],y_parent[0])
+                sign_yaw = -1
+            yaw = sign_yaw * w * unfiltered_yaw
+            
+
+        # Yaw calculation
+        sign = 1 if y_parent[0]>0 else -1
+
+        theta_z = abs(sign*np.arccos(y_parent[1])) # rotation around z
+        if side == "left":
+            theta_y = yaw   # rotation around y
+        elif side == "right":
+            theta_y = yaw   # rotation around y
+
+        
+        
+        rot = R.from_euler('YZ', [theta_y, theta_z], degrees=False)
+        
+        R_mat_no_roll = rot.as_matrix()
+        z_0 = R_mat_no_roll[:,2] # without roll
+        z_1 = rot_matrix[:,2] # with roll
+
+        # if side == "right":
+        #     print(z_0)
+        #     print(z_1)
+        #     print()
+
+        roll = self.signed_angle(z_0, z_1, y_parent, degrees=False)
+        
+
+        if side =="left":
+            pitch = np.pi/2-pitch  
+            roll += np.pi/2
+        elif side == "right":
+            pitch = np.pi/2+pitch 
+            roll -= np.pi/2
+
+        roll = -roll
+
+        return pitch, roll, yaw
+    
+    
 def sigint_handler(signum, frame):
     global node
     node.shutdown_requested = True
@@ -765,13 +1118,18 @@ def sigint_handler(signum, frame):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--upperbody', action  = 'store_true', help = 'Control only upperbody with arm_sdk')
+    parser.add_argument(
+        '--mode', 
+        choices = ["whole-body", "upper-body"],
+        default = "upper-body",
+    )
+
     args = parser.parse_args()
     global node
 
     rclpy.init()
 
-    node = G1TeleopNode(args.upperbody)
+    node = G1TeleopNode(args.mode)
 
     signal.signal(signal.SIGINT, sigint_handler)
 
@@ -783,7 +1141,7 @@ def main():
                 shutdown_thread = threading.Thread(target=node.cleanup)
                 shutdown_thread.start()
                 
-            if (not args.upperbody or node.current_arm_sdk == 0.0) and node.exit_teleop:
+            if (args.mode == "whole-body" or node.current_arm_sdk == 0.0) and node.exit_teleop:
                 break
     finally:
         node.destroy_node()
