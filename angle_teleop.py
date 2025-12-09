@@ -193,14 +193,15 @@ G1_JOINT_ID_GROUPS = [
 
 class G1TeleopNode(Node):
 
-    def __init__(self, mode):
+    def __init__(self, mode):     
+
+        super().__init__('g1_teleop_node')
 
         if mode == "whole-body":
             self.upperbody = False
         else:
-            self.upperbody = True        
-
-        super().__init__('g1_teleop_node')
+            self.upperbody = True   
+            
         self.imus_subscription = self.create_subscription(
             ImuReadings,
             'sensorsuit/imus',
@@ -444,13 +445,14 @@ class G1TeleopNode(Node):
                 msg = LowCmd()
                 # msg.mode_pr = 0
                 # msg.mode_machine = 4
-     
-                if not self.teleop_enabled: #and all(abs(angle) < np.radians(2) for angle in self.g1_current_joint_angles.values()):
-                    self.current_arm_sdk = max(self.current_arm_sdk-self.arm_sdk_step, 0.0)
-                    msg.motor_cmd[G1JointID.NotUsedJoint].q = self.current_arm_sdk
-                elif self.teleop_enabled:
-                    self.current_arm_sdk = min(self.current_arm_sdk+self.arm_sdk_step, 1.0)            
-                    msg.motor_cmd[G1JointID.NotUsedJoint].q = self.current_arm_sdk 
+
+                if self.upperbody:
+                    if not self.teleop_enabled: #and all(abs(angle) < np.radians(2) for angle in self.g1_current_joint_angles.values()):
+                        self.current_arm_sdk = max(self.current_arm_sdk-self.arm_sdk_step, 0.0)
+                        msg.motor_cmd[G1JointID.NotUsedJoint].q = self.current_arm_sdk
+                    elif self.teleop_enabled:
+                        self.current_arm_sdk = min(self.current_arm_sdk+self.arm_sdk_step, 1.0)            
+                        msg.motor_cmd[G1JointID.NotUsedJoint].q = self.current_arm_sdk 
                     
                 # print(self.current_arm_sdk)
 
