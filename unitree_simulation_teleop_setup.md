@@ -156,16 +156,16 @@ for the sensor-suit's ROS2 interfaces
 - Change the `SENSORSUIT_SERVER_ADDRESS` parameter if you use the `sensorsuit_node.py` file in this repo.
 
 ## Run
-- Run the controller in  the RasPi
+- Turn on the puppet
 - Run the `sensorsuit_node.py` ROS2 node:
   ```bash
   python3 sensorsuit_node.py
   ```
-- Put the puppet in T-pose and run the teleop file:
+- Put the puppet in T-pose and run the teleop file in a new terminal:
   ```bash
-  python3 teleop_angle.py
+  python3 angle_teleop.py
   ```
-- Open C++ Simulator
+- Open C++ Mujoco Simulator
   ```bash
   cd unitree_mujoco/simulate/build/
   ./unitree_mujoco simulation
