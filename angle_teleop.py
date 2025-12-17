@@ -525,10 +525,10 @@ class G1TeleopNode(Node):
                 elif link_id == SensorID.UpperArmRight:
                     angles = self.pry_shoulder(rot_matrix, "right")
 
-                    # print(np.degrees(angles[0]))
-                    # print(np.degrees(angles[1]))
-                    # print(np.degrees(angles[2]))
-                    # print()
+                    print(np.degrees(angles[0]))
+                    print(np.degrees(angles[1]))
+                    print(np.degrees(angles[2]))
+                    print()
 
                     for joint_id, angle in zip(joint_id_group, angles):
                         # if abs(self.g1_target_joint_angles[joint_id] - angle) < np.radians(200):
@@ -536,19 +536,19 @@ class G1TeleopNode(Node):
                         self.g1_target_joint_angles[joint_id] = angle
                     self.g1_target_joint_angles[G1JointID.RightShoulderYaw] += self.right_elbow_roll
                 
-                elif link_id == SensorID.ForearmLeft:
-                    pitch, roll, yaw = self.pr_elbow(rot_matrix, "left")
+                # elif link_id == SensorID.ForearmLeft:
+                #     pitch, roll, yaw = self.pr_elbow(rot_matrix, "left")
 
-                    # print(np.degrees(pitch))
-                    # print(np.degrees(roll))
-                    # print(np.degrees(yaw))
-                    # print()
+                #     # print(np.degrees(pitch))
+                #     # print(np.degrees(roll))
+                #     # print(np.degrees(yaw))
+                #     # print()
 
-                    self.g1_target_joint_angles[joint_id_group[0]] = pitch
-                    self.left_elbow_roll = roll
-                    self.left_elbow_yaw = yaw
+                #     self.g1_target_joint_angles[joint_id_group[0]] = pitch
+                #     self.left_elbow_roll = roll
+                #     self.left_elbow_yaw = yaw
 
-                    # print(joint_id_group)
+                #     # print(joint_id_group)
                 
                 elif link_id == SensorID.ForearmRight:
                     pitch, roll, yaw = self.pr_elbow(rot_matrix, "right")
@@ -729,11 +729,17 @@ class G1TeleopNode(Node):
         axis_u = axis / np.linalg.norm(axis)
         
         # Unsigned angle
-        angle = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+        # angle = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
         
-        # Determine sign using cross product
-        sign = np.sign(np.dot(np.cross(v1_u, v2_u), axis_u))
-        signed_angle = angle * sign
+        # # Determine sign using cross product
+        # sign = np.sign(np.dot(np.cross(v1_u, v2_u), axis_u))
+        # signed_angle = angle * sign
+
+        angle = np.arctan2(
+            np.dot(axis_u,np.cross(v1_u, v2_u)),
+            np.dot(v1_u,v2_u)
+        )
+        signed_angle = angle
         
         if degrees:
             signed_angle = np.degrees(signed_angle)
@@ -742,6 +748,7 @@ class G1TeleopNode(Node):
     
     def pry_shoulder(self, rot_matrix, side):
         y_parent = rot_matrix[:,1] # local y-axis represented in shoulder frame 
+        z_parent = rot_matrix[:,2] # local y-axis represented in shoulder frame 
         # if side == "left":
             # print("y")
             # print(y_parent[0])
@@ -751,12 +758,15 @@ class G1TeleopNode(Node):
 
 
         # Pitch calculation
-        eps = 0.2
-        k = 5
+        eps = 0.45
+        k = 2
 
         r = np.hypot(y_parent[0], y_parent[2])
         
         w = 1.0 - np.exp(- (r / eps)**k) # Filter for pitch angle near y-axis
+
+        # if side == "right":
+        #     print(w)
 
         if side == "left":
             if self.g1_target_joint_angles[G1JointID.LeftShoulderRoll] < np.pi/2:
@@ -765,20 +775,34 @@ class G1TeleopNode(Node):
                 pitch = w * np.arctan2(y_parent[0],-y_parent[2])
 
         elif side == "right":
-            if self.g1_target_joint_angles[G1JointID.RightShoulderRoll] > -np.pi/2:
-                pitch = w * np.arctan2(y_parent[0],y_parent[2]) 
-            else:
-                pitch = -w * np.arctan2(y_parent[0],-y_parent[2]) 
+            # if self.g1_target_joint_angles[G1JointID.RightShoulderRoll] > -np.pi/2:
+            #     pitch = w * np.arctan2(y_parent[0],y_parent[2]) 
+            # else:
+            #     pitch = -w * np.arctan2(y_parent[0],-y_parent[2]) 
+
+            pitch = w * np.arctan2(y_parent[0],y_parent[2]) 
+            
 
         # Roll calculation
-        roll = np.arcsin(y_parent[1]) if y_parent[2]>=0 or abs(pitch) > np.pi/2 else np.pi-np.arcsin(y_parent[1])
-        # print("Roll         ", np.degrees(roll))
-        # print("y_parent:   ", y_parent)
-        # print("pitch:       ", np.degrees(pitch))
-        # print()
+        #roll = np.arcsin(y_parent[1]) #if y_parent[2]>=0 or abs(pitch) > np.pi/2 else np.pi-np.arcsin(y_parent[1])
+        # roll = np.arccos(-z_parent[1]) if -z_parent[1]>=0 else np.pi-np.arccos(-z_parent[1])
+
+        rot_pitch = R.from_euler('Y', pitch, degrees=False)
+
+        y_parent_new = rot_pitch.inv().apply(y_parent)
+
+        roll = np.arccos(y_parent_new[2]) if y_parent_new[1]>=0 else -np.arccos(y_parent_new[2])
+
+        
+        print()
+        # if side == "right":
+        #     print("Roll         ", np.degrees(roll))
+        #     print("z_parent:   ", -z_parent)
+        #     print("pitch:       ", np.degrees(pitch))
+        #     print()
         # Yaw calculation
-        sign = 1 if y_parent[2]>0 else -1
-        theta_x = abs(sign*np.arccos(y_parent[1])) # rotation around x
+        theta_x = abs(np.arccos(y_parent[1])) # rotation around x
+
         if roll>np.pi/2:
             theta_x = -theta_x
 
@@ -793,6 +817,11 @@ class G1TeleopNode(Node):
         z_0 = R_mat_no_yaw[:,2] # without yaw
         z_1 = rot_matrix[:,2] # with yaw
 
+        # if side == "right":
+        #     print(z_0)
+        #     print(z_1)
+        #     print()
+
         yaw = self.signed_angle(z_0, z_1, y_parent, degrees=False)
         # if roll >= np.radians(135):
         #     yaw = -yaw
@@ -802,6 +831,12 @@ class G1TeleopNode(Node):
 
         if side == "right":
             roll = -roll
+
+        # if abs(roll)>=np.pi/2 and abs(pitch)>= 2./3.*np.pi:
+        #     if pitch<0:
+        #         pitch = -2./3.*np.pi
+        #     else:
+        #         pitch = 2./3.*np.pi
 
         return pitch, roll, yaw
     
@@ -818,8 +853,8 @@ class G1TeleopNode(Node):
         pitch = sign * np.arccos(y_parent[1]) 
 
         # Roll calculation
-        eps = 0.2
-        k = 5
+        eps = 0.45
+        k = 2
         r = np.hypot(y_parent[0], y_parent[2])
         w = 1.0 - np.exp(- (r / eps)**k) # Filter for pitch angle near y-axis
 
