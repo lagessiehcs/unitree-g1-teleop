@@ -21,6 +21,7 @@ from geometry_msgs.msg import Quaternion
 # Get from environment and use 127.0.0.1 if not set
 SENSORSUIT_SERVER_ADDRESS = os.getenv(
     'SENSORSUIT_SERVER_ADDRESS', "sensorsuit-puppet-quan.local:5000")
+    #'SENSORSUIT_SERVER_ADDRESS', "datasuit-konstantin.local:5000")
 
 
 class SensorSuitDriver(Node):
