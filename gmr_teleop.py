@@ -20,6 +20,16 @@ from tqdm import tqdm
 
 import argparse
 
+# Import sensor suit skeleton utilities (no ROS dependencies)
+from sensorsuit_skeleton import (
+    HumanBodyMesurements,
+    get_sensorsuit_skeleton_data,
+    compute_sensor_forward_kinematics,
+    _get_sensor_frame_offsets,
+    _get_sensor_kinematic_chain,
+    _get_sensor_local_offsets
+)
+
 class SensorID():
     Chest = 1
     LowerBack = 2
@@ -103,18 +113,6 @@ class G1JointID():
     RightWristYaw = 28    # NOTE: INVALID for g1 23dof
     NotUsedJoint = 29
 
-class HumanBodyMesurements():
-    Hips = 0.24
-    Shoulder = 0.4
-    UpperArm = 0.3
-    ForeArm = 0.18
-    Thigh = 0.45
-    Shank = 0.40
-    Foot = 0.25
-    Hand = 0.18
-    Back = 0.5
-
-
 G1_JOINTS_23DOF = [
     G1JointID.LeftHipPitch,
     G1JointID.LeftHipRoll,
@@ -185,17 +183,17 @@ class G1TeleopNode(Node):
         if mode == "whole-body":
             self.upperbody = False
         else:
-            self.upperbody = True   
+            self.upperbody = True
         self.imus_subscription = self.create_subscription(
             ImuReadings,
             'sensorsuit/imus',
             self.listener_callback,
             10,
             )
-        
+
         self.calib_lock = threading.Lock()
 
-        
+
         if not self.upperbody:
             self.current_angles_subscription = self.create_subscription(
                 LowState,
@@ -203,7 +201,7 @@ class G1TeleopNode(Node):
                 self.current_angles_callback,
                 10,
             )
-        
+
         if self.upperbody:
             teleop_topic = '/arm_sdk'
             self.robot_joints = G1_UPPERBODY_JOINTS_23DOF
@@ -211,44 +209,13 @@ class G1TeleopNode(Node):
             teleop_topic = '/lowcmd'
             self.robot_joints = G1_JOINTS_23DOF
 
-            
-        self.root = "LowerBack"
-        
-        offset_lowerback = 10 # degrees
-        self.offset_orientation = {
-            "LowerBack":        R.from_euler('XYZ', [0.0, 0.0, 0.0], degrees=True),
-            "UpperBack":        R.from_euler('XYZ', [offset_lowerback, 0.0, 0.0], degrees=True),
-            "ThighLeft":        R.from_euler('XYZ', [offset_lowerback, -90.0, 0.0], degrees=True),
-            "ThighRight":       R.from_euler('XYZ', [offset_lowerback, 90.0, 0.0], degrees=True),
-            "ShankLeft":        R.from_euler('XYZ', [offset_lowerback, -90.0, 0.0], degrees=True),
-            "ShankRight":        R.from_euler('XYZ', [offset_lowerback, 90.0, 0.0], degrees=True),
-            "FootLeft":         R.from_euler('XYZ', [-(90.0-offset_lowerback), 0.0, 180], degrees=True),
-            "FootRight":        R.from_euler('XYZ', [-(90.0-offset_lowerback), 0.0, 180], degrees=True),
-            "UpperArmLeft":     R.from_euler('XYZ', [-(90.0-offset_lowerback), 0.0, -90.0], degrees=True),
-            "UpperArmRight":    R.from_euler('XYZ', [-(90.0-offset_lowerback), 0.0, 90.0], degrees=True),
-            "ForeArmLeft":      R.from_euler('XYZ', [-(90.0-offset_lowerback), 0.0, -90.0], degrees=True),
-            "ForeArmRight":      R.from_euler('XYZ', [-(90.0-offset_lowerback), 0.0, 90.0], degrees=True),
-            "HandLeft":         R.from_euler('XYZ', [-(90.0-offset_lowerback), 0.0, -90.0], degrees=True),
-            "HandRight":        R.from_euler('XYZ', [-(90.0-offset_lowerback), 0.0, 90.0], degrees=True),
-        }
 
-        h=HumanBodyMesurements()
-        self.offset_position = {
-            "LowerBack":        [0.0, 0.0, 0.0],
-            "UpperBack":        [0.0, 0.0, 0.0],
-            "ThighLeft":        [-h.Hips/2., 0.0, 0.0],
-            "ThighRight":       [h.Hips/2., 0.0, 0.0],
-            "ShankLeft":        [0.0, -h.Thigh, 0.0],
-            "ShankRight":        [0.0, -h.Thigh, 0.0],
-            "FootLeft":         [0.0, -h.Shank, 0.0],
-            "FootRight":        [0.0, -h.Shank, 0.0],
-            "UpperArmLeft":     [-h.Shoulder/2, h.Back, 0.0],    
-            "UpperArmRight":    [h.Shoulder/2, h.Back, 0.0],    
-            "ForeArmLeft":      [0.0, -h.UpperArm, 0.0],
-            "ForeArmRight":      [0.0, -h.UpperArm, 0.0],
-            "HandLeft":         [0.0, -h.ForeArm, 0.0],
-            "HandRight":        [0.0, -h.ForeArm, 0.0],
-        }
+        self.root = "LowerBack"
+
+        # Initialize skeleton data using shared functions
+        self.offset_orientation = _get_sensor_frame_offsets(offset_lowerback_deg=10)
+        self.offset_position = _get_sensor_local_offsets()
+        self.link_base_mapping = _get_sensor_kinematic_chain()
 
         self.human_data = {
             "LowerBack":        [[None]*3, [None]*4], # Root
@@ -285,23 +252,6 @@ class G1TeleopNode(Node):
             "HandRight":        SensorID.HandRight,
         }
         self.id_name_mapping = {id: name for name, id in self.name_id_mapping.items()}
-
-        self.link_base_mapping = {
-            "LowerBack":        None,
-            "UpperBack":        "LowerBack",
-            "ThighLeft":        "LowerBack",
-            "ThighRight":       "LowerBack",
-            "ShankLeft":        "ThighLeft",
-            "ShankRight":       "ThighRight",
-            "FootLeft":         "ShankLeft",
-            "FootRight":        "ShankRight",
-            "UpperArmLeft":     "UpperBack",
-            "UpperArmRight":    "UpperBack",
-            "ForeArmLeft":      "UpperArmLeft",
-            "ForeArmRight":     "UpperArmRight",
-            "HandLeft":         "ForeArmLeft",
-            "HandRight":        "ForeArmRight",
-        }
 
         self.shutdown_requested = False
         self.shutting_down = False
@@ -528,28 +478,17 @@ class G1TeleopNode(Node):
                     self.sensor_orientations_global[link] = self.sensor_orientations_local[self.root].inv() * self.calib_orientation[link] * self.sensor_orientations_local[link]
                     self.human_data[link][1] = self.sensor_orientations_global[link].as_quat(scalar_first=True)
 
-                pos_set_flag = {link:False for link in self.human_data.keys()}
-                pos_set_flag[self.root] = True
+                # Compute FK using refactored function
+                positions = compute_sensor_forward_kinematics(
+                    self.sensor_orientations_global,
+                    self.human_data[self.root][0],
+                    self.link_base_mapping,
+                    self.offset_position
+                )
 
-                # if any(f is None for f in self.sensor_orientations_global.values()):
-                #     print(1)
-                #     return
-
-                while any(f is False for f in pos_set_flag.values()):
-                    for link in self.human_data.keys():
-
-                        base = self.link_base_mapping[link]
-
-                        if link == self.root:
-                            continue
-                            
-                        if not pos_set_flag[link] and pos_set_flag[base]:
-                            self.human_data[link][0] = self.human_data[base][0] + self.sensor_orientations_global[base].apply(self.offset_position[link])
-                        
-                        else:
-                            continue
-                            
-                        pos_set_flag[link] = True
+                # Update human_data with computed positions
+                for link, pos in positions.items():
+                    self.human_data[link][0] = pos
             
                 # pos = [round(p,3) for p in self.human_data["HandLeft"][0]]
                 # print(len(self.human_data.items()))
