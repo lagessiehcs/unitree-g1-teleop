@@ -20,7 +20,6 @@ from tqdm import tqdm
 
 import argparse
 
-# Import sensor suit skeleton utilities (no ROS dependencies)
 from sensorsuit_skeleton import (
     HumanBodyMesurements,
     get_sensorsuit_skeleton_data,
@@ -212,7 +211,7 @@ class G1TeleopNode(Node):
 
         self.root = "LowerBack"
 
-        # Initialize skeleton data using shared functions
+        # Initialize skeleton data
         self.offset_orientation = _get_sensor_frame_offsets(offset_lowerback_deg=10)
         self.offset_position = _get_sensor_local_offsets()
         self.link_base_mapping = _get_sensor_kinematic_chain()
@@ -478,7 +477,6 @@ class G1TeleopNode(Node):
                     self.sensor_orientations_global[link] = self.sensor_orientations_local[self.root].inv() * self.calib_orientation[link] * self.sensor_orientations_local[link]
                     self.human_data[link][1] = self.sensor_orientations_global[link].as_quat(scalar_first=True)
 
-                # Compute FK using refactored function
                 positions = compute_sensor_forward_kinematics(
                     self.sensor_orientations_global,
                     self.human_data[self.root][0],
@@ -486,7 +484,6 @@ class G1TeleopNode(Node):
                     self.offset_position
                 )
 
-                # Update human_data with computed positions
                 for link, pos in positions.items():
                     self.human_data[link][0] = pos
             
