@@ -21,7 +21,7 @@ from tqdm import tqdm
 import argparse
 
 from sensorsuit_skeleton import (
-    HumanBodyMesurements,
+    HumanBodyMeasurements,
     get_sensorsuit_skeleton_data,
     compute_sensor_forward_kinematics,
     _get_sensor_frame_offsets,
