@@ -1,8 +1,8 @@
-conda activate unitree 
+conda activate teleop 
 # Only run this in interactive shells
 if [[ $- == *i* ]]; then
     # Define root directory (change this one if the root directory of unitree_ros2 is different)
-    ROOT_DIR=~/Desktop/quan
+    ROOT_DIR=~/
 
     # Run commands with ROOT_DIR
     source /opt/ros/jazzy/setup.bash
