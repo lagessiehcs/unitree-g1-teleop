@@ -163,10 +163,10 @@ def compute_sensor_forward_kinematics(sensor_orientations_global, root_position,
             if link == root:
                 continue
 
-            if not pos_set_flag[link] and pos_set_flag[base]:
-                positions[link] = positions[base] + sensor_orientations_global[base].apply(local_offsets[link])
-            else:
+            if pos_set_flag[link] or not pos_set_flag[base]:
                 continue
+
+            positions[link] = positions[base] + sensor_orientations_global[base].apply(local_offsets[link])
 
             pos_set_flag[link] = True
 
