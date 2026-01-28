@@ -11,7 +11,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 
-class HumanBodyMesurements():
+class HumanBodyMeasurements():
     Hips = 0.24
     Shoulder = 0.4
     UpperArm = 0.3
@@ -59,7 +59,7 @@ def _get_sensor_local_offsets():
     Returns:
         dict: Mapping joint name to [x, y, z] offset in parent frame
     """
-    h = HumanBodyMesurements()
+    h = HumanBodyMeasurements()
     return {
         "LowerBack":        [0.0, 0.0, 0.0],
         "UpperBack":        [0.0, 0.0, 0.0],
@@ -116,7 +116,7 @@ def get_sensorsuit_skeleton_data(offset_lowerback_deg=10):
         tuple: (body_measurements, kinematic_chain, local_offsets, frame_offsets)
     """
     return (
-        HumanBodyMesurements(),
+        HumanBodyMeasurements(),
         _get_sensor_kinematic_chain(),
         _get_sensor_local_offsets(),
         _get_sensor_frame_offsets(offset_lowerback_deg)
