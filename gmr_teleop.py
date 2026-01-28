@@ -1,8 +1,5 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import ReentrantCallbackGroup
-
 
 from sensorsuit_msgs.msg import ImuReadings
 from scipy.spatial.transform import Rotation as R
@@ -21,8 +18,6 @@ from tqdm import tqdm
 import argparse
 
 from sensorsuit_skeleton import (
-    HumanBodyMeasurements,
-    get_sensorsuit_skeleton_data,
     compute_sensor_forward_kinematics,
     _get_sensor_frame_offsets,
     _get_sensor_kinematic_chain,
