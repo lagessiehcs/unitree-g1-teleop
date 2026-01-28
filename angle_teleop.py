@@ -1023,7 +1023,7 @@ class G1TeleopNode(Node):
         if side == "left":
             pitch += np.radians(self.offset_lowerback)
         elif side == "right":
-            pitch -= np.radians(self.offset_lowerback)
+            pitch += np.radians(self.offset_lowerback)
 
         return pitch, roll, yaw
     
@@ -1040,8 +1040,8 @@ class G1TeleopNode(Node):
         pitch = sign * np.arccos(y_parent[1]) 
 
         # Roll calculation
-        eps = 0.2
-        k = 5
+        eps = 0.45
+        k = 2
         r = np.hypot(y_parent[0], y_parent[2])
         w = 1.0 - np.exp(- (r / eps)**k) # Filter for pitch angle near y-axis
 
@@ -1063,6 +1063,7 @@ class G1TeleopNode(Node):
                 unfiltered_roll = np.arctan2(y_parent[2],y_parent[0])
                 sign_roll = -1
             roll = sign_roll * w * unfiltered_roll
+            print(w)
             
 
         # Yaw calculation
